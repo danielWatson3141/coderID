@@ -1,0 +1,104 @@
+#include<iostream>
+#include<cstdio>
+#include<cstring>
+#include<string>
+#include<queue>
+#include<algorithm>
+#include<vector>
+#include<map>
+#include<set>
+#include<stdlib.h>
+#include<ctype.h>
+#include<utility>
+#include<cmath>
+using namespace std;
+//#pragma comment(linker, "/STACK:1024000000,1024000000")
+#define eps 1e-7
+#define ll long long
+#define i64 __int64
+#define INF 1000000005
+#define pb push_back
+#define sz(b) (int)b.size()
+#define lson k<<1
+#define rson k<<1|1
+#define MOD 1000000007
+#define CLR(t,x) memset(t,x,sizeof(t));
+#define REP(k,x,y) for(k=x;k<y;k++)
+#define N 1500000
+char s1[200][55],s2[200][55],s[200][55];
+map<string,int> mp;
+int num1[55],num2[55],vis[55],b[55];
+int main()
+{
+    freopen("A-large.in","r",stdin);
+    freopen("A-large.out","w",stdout);
+    int cas,n,l,tt=1;
+    scanf("%d",&cas);
+    while(cas--)
+    {
+        scanf("%d%d",&n,&l);
+        mp.clear();
+        CLR(num1,0);
+        CLR(num2,0);
+        CLR(vis,0);
+        for(int i=0;i<n;i++)
+        {
+            scanf("%s",s1[i]);
+            for(int j=0;j<l;j++) if(s1[i][j]=='0') num1[j]++;
+        }
+        for(int i=0;i<n;i++)
+        {
+            scanf("%s",s2[i]);mp[s2[i]]=1;
+            for(int j=0;j<l;j++) if(s2[i][j]=='0') num2[j]++;
+        }
+        int ok=1,cnt=0,lb=0;
+        for(int i=0;i<l;i++)
+        {
+            if(num1[i]==num2[i]&&num1[i]==l/2) b[lb++]=i;
+            if(num1[i]==num2[i]) continue;
+            else if(num1[i]==n-num2[i]) vis[i]=1,cnt++;
+            else {ok=0;break;}
+        }
+        printf("Case #%d: ",tt++);
+        if(!ok) puts("NOT POSSIBLE");
+        else
+        {
+            for(int i=0;i<n;i++)
+                for(int j=0;j<l;j++)
+                    if(vis[j])
+                    {
+                        if(s1[i][j]=='0') s1[i][j]='1';
+                        else s1[i][j]='0';
+                    }
+            for(int i=0;i<n;i++) if(!mp[s1[i]]) {ok=0;break;}
+            if(ok) printf("%d\n",cnt);
+            else
+            {
+                int S=(1<<lb),ans=INF,num;
+                for(int i=0;i<S;i++)
+                {
+                    memcpy(s,s1,sizeof(s1));
+                    num=0;
+                    for(int j=0;j<lb;j++)
+                    {
+                        if(i&(1<<j))
+                        {
+                            num++;
+                            for(int k=0;k<n;k++)
+                            {
+                                if(s[k][b[j]]=='0') s[k][b[j]]='1';
+                                else s[k][b[j]]='0';
+                            }
+                        }
+                    }
+                    int ok2=1;
+                    for(int j=0;j<n;j++) if(!mp[s[j]]) {ok2=0;break;}
+                    if(ok2) ans=min(ans,cnt+num);
+                }
+                if(ans==INF) puts("NOT POSSIBLE");
+                else printf("%d\n",ans);
+            }
+        }
+    }
+    return 0;
+}

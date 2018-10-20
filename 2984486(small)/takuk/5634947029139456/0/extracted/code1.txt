@@ -1,0 +1,82 @@
+import java.io.*;
+import java.util.Arrays;
+
+
+public class Main {
+    public static void main(String[] args) {
+        BufferedReader r = new BufferedReader(new InputStreamReader(System.in));
+        try {
+            //number of test cases
+            int cases = Integer.parseInt(r.readLine());
+
+            //for each test case
+            for(int i=1;i<=cases;i++){
+                //input
+                String[] line = r.readLine().split(" ");
+                int n = Integer.parseInt(line[0]);
+                int l = Integer.parseInt(line[1]);
+
+                int[] out = new int[n];
+                int[] cout = new int[n];
+                int[] dev = new int[n];
+
+                line = r.readLine().split(" ");
+                String[] line2 = r.readLine().split(" ");
+
+                for(int j=0;j<n;j++){
+                    out[j] = Integer.parseInt(line[j], 2);
+                    dev[j] = Integer.parseInt(line2[j], 2);
+                }
+
+                Arrays.sort(dev);
+
+                int ret = 0;
+                //processing
+                boolean b = true;
+                for(int ii=0;ii<Math.pow(2, l);ii++){
+                    b = true;
+                    for(int jj=0;jj<n;jj++){
+                        cout[jj] = out[jj]^ii;
+                    }
+                    Arrays.sort(cout);
+                    b = compare(cout, dev);
+                    ret = ii;
+                    if(b){
+                        break;
+                    }
+                }
+                if(!b) ret++;
+                //System.out.println("ret: "+ ret);
+                int ans = 0;
+                if((ret == Math.pow(2,l))){
+                    ans = -1;
+                } else {
+                    int index = 1;
+                    for(int ii=0;ii<l;ii++){
+                        if((index&ret)>0){
+                            ans++;
+                            //System.out.println("here: " +index + " " + ret);
+                        }
+                        index = index << 1;
+                    }
+                }
+                //output
+                System.out.print("Case #" + i + ": ");
+                System.out.println((ans==-1)?"NOT POSSIBLE":ans);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static boolean compare(int[] a, int[] b){
+        boolean ret = true;
+        for(int i=0;i<a.length;i++){
+            if(a[i]!=b[i]){
+                ret = false;
+                break;
+            }
+        }
+        return ret;
+    }
+}

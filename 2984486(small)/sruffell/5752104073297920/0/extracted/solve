@@ -1,0 +1,21 @@
+#!/usr/bin/env python
+# vim: set filetype=python et sw=4 ts=4:
+
+import sys
+
+T = int(sys.stdin.readline())
+
+half = int(sum(xrange(1000))/2)
+
+for case in xrange(T):
+    sys.stdout.write("Case #%d: " % (case + 1))
+
+    N = int(sys.stdin.readline())
+    permutations = [int(x) for x in sys.stdin.readline().split()]
+
+    sum_of_first_half = sum(permutations[0:500])
+    if sum_of_first_half < half:
+        sys.stdout.write("BAD")
+    else:
+        sys.stdout.write("GOOD")
+    sys.stdout.write("\n")   

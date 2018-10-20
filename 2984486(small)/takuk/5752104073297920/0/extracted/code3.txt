@@ -1,0 +1,36 @@
+import java.io.*;
+import java.util.*;
+
+
+public class Main {
+    public static void main(String[] args) {
+        BufferedReader r = new BufferedReader(new InputStreamReader(System.in));
+        try {
+            //number of test cases
+            int cases = Integer.parseInt(r.readLine());
+
+            //for each test case
+            for(int i=1;i<=cases;i++){
+                //input
+                int n = Integer.parseInt(r.readLine());
+                int[] num = new int[n];
+                String[] str = r.readLine().split(" ");
+                for(int ii=0;ii<n;ii++){
+                    num[ii] = Integer.parseInt(str[ii]);
+                }
+
+                //processing
+                int match = 0;
+                for(int ii=0;ii<n;ii++){
+                    if(ii==num[ii]) match++;
+                }
+
+                //output
+                System.out.print("Case #" + i + ": ");
+                System.out.println((match>50)?"GOOD":"BAD");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}

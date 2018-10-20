@@ -1,0 +1,43 @@
+solve: args
+
+  | en el yesh req matrix flat result |
+
+  en := args first first.
+  el := args first second.
+  yesh := args second collect: [ :s| s copyFrom: 1 to: el ].
+  req := args third collect: [ :s| s copyFrom: 1 to: el ].
+  matrix := self en: en el: el yesh: yesh req: req.
+
+  flat := matrix flatten.
+
+  result := flat select: [ :flip | (matrix collect: [ :row | row indexOf: flip ]) asSortedCollection = (1 to: en) asSortedCollection ].
+  result := result asSet asSortedCollection: [ :a :b | ( a select: [ :c | c = $x ]) < ( b select: [ :c | c = $x ])  ] .
+ 
+result isEmpty
+	ifTrue: [  ^ #('NOT POSSIBLE') ]
+  ifFalse: [ ^Array with: (result first  select: [ :c | c = $x ]) size ]
+
+ en: en el: el yesh: yesh req: req
+
+  "NOT POSSIBLE"
+
+   "^Array with: 5"
+
+	| matrix |
+	
+	matrix := Array new: en.
+	1 to: en do: [ :i | matrix at: i put: (Array new: en) ].
+
+	yesh doWithIndex: 
+	[ 
+	    :m :i | 
+	    req doWithIndex: [ :r : j |
+	        (matrix at: i) at: j put: (self changeFrom: m to: r) 
+	   ]
+	].
+^matrix
+
+
+changeFrom: m  to: r
+
+	^m  with: r collect: [ :m1 :r1 |  m1 = r1 ifTrue: [ $* ] ifFalse: [ $x ] ]

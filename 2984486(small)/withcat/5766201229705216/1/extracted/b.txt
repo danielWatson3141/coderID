@@ -1,0 +1,182 @@
+<?
+//<meta http-equiv="content-type" content="text/html; charset=utf-8">
+?>
+<h2>Full Binary Tree</h2>
+<p>&nbsp;</p>
+<h3>Problem</h3>
+<p>A tree is a connected graph with no cycles.</p>
+<p>A rooted tree is a tree in which one special vertex is called the root. If there is an edge between <strong>X</strong> and <strong>Y</strong> in a rooted tree, we say that <strong>Y</strong> is a child of <strong>X</strong> if <strong>X</strong> is closer to the root than <strong>Y</strong> (in other words, the shortest path from the root to <strong>X</strong> is shorter than the shortest path from the root to <strong>Y</strong>).</p>
+<p>A full binary tree is a rooted tree where every node has either exactly 2 children or 0 children.</p>
+<p>You are given a tree <strong>G</strong> with <strong>N</strong> nodes (numbered from <strong>1</strong> to <strong>N</strong>). You are allowed to delete some of the nodes. When a node is deleted, the edges connected to the deleted node are also deleted. Your task is to delete as few nodes as possible so that the remaining nodes form a full binary tree for some choice of the root from the remaining nodes.</p>
+<h3>Input</h3>
+<p>The first line of the input gives the number of test cases, <strong>T</strong>. <strong>T</strong> test cases follow. The first line of each test case contains a single integer <strong>N</strong>, the number of nodes in the tree. The following <strong>N</strong>-1 lines each one will contain two space-separated integers: <strong>Xi</strong> <strong>Yi</strong>, indicating that <strong>G</strong> contains an undirected edge between <strong>Xi</strong> and <strong>Yi</strong>.</p>
+<h3>Output</h3>
+<p>For each test case, output one line containing &quot;Case #<strong>x</strong>: <strong>y</strong>&quot;, where <strong>x</strong> is the test case number (starting from 1) and <strong>y</strong> is the minimum number of nodes to delete from <strong>G</strong> to make a full binary tree.</p>
+<h3>Limits</h3>
+<p>1 ≤ <strong>T</strong> ≤ 100.<br />
+  1 ≤ <strong>Xi</strong>, <strong>Yi</strong> ≤ <strong>N</strong><br />
+  Each test case will form a valid connected tree.</p>
+<h4>Small dataset</h4>
+<p>2 ≤ <strong>N</strong> ≤ 15.<br />
+</p>
+<h4>Large dataset</h4>
+<p>2 ≤ <strong>N</strong> ≤ 1000.<br />
+</p>
+<h3>Sample</h3>
+<div>
+  <table>
+    <tbody>
+      <tr>
+        <td><br />
+          Input <br />
+        </td>
+        <td><br />
+          Output <br />
+        </td>
+      </tr>
+      <tr>
+        <td><pre>3
+3
+2 1
+1 3
+7
+4 5
+4 2
+1 2
+3 1
+6 4
+3 7
+4
+1 2
+2 3
+3 4</pre></td>
+        <td><pre>Case #1: 0
+Case #2: 2
+Case #3: 1</pre></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<p>In the first case, <strong>G</strong> is already a full binary tree (if we consider node 1 as the root), so we don't need to do anything.</p>
+<p>In the second case, we may delete nodes 3 and 7; then 2 can be the root of a full binary tree.</p>
+<p>In the third case, we may delete node 1; then 3 will become the root of a full binary tree (we could also have deleted node 4; then we could have made 2 the root).</p>
+<p>&nbsp;</p>
+<h3>Answer</h3>
+<form id="form1" name="form1" enctype="multipart/form-data" method="post" action="<?=$_SERVER['PHP_SELF']?>">
+  <input name="userfile" type="file" />
+  <input type="submit" name="button" id="button" value="전송" />
+</form>
+<?
+$info = pathinfo($_SERVER['PHP_SELF']);
+$qid = $info['filename'];
+
+$in_file_path = "q/{$qid}.in.txt";
+$out_file_path = "q/{$qid}.out.txt";
+
+/* begin */
+
+function delete_count(&$edge_list, &$delete_sum, $prev, $curr, $hoop=0)
+{
+	if ( $hoop > 10000 ) {
+		print_r($edge_list);
+		exit();
+	}
+	
+	$childs_sum = 0;
+	$child_sum_list = array();
+	foreach ( $edge_list[$curr] as $child => $val ) {
+		if ( $child == $prev ) continue;
+		$child_sum = delete_count($edge_list, $delete_sum, $curr, $child, ++$hoop);
+		$child_sum_list[$child] = $child_sum;
+		$childs_sum += $child_sum;
+	}
+	
+	arsort($child_sum_list);
+	$child_num = count($child_sum_list);
+	
+	$curr_delete_sum = 0;
+	if ( $child_num > 2 ) {
+		array_shift($child_sum_list);
+		array_shift($child_sum_list);
+		foreach ( $child_sum_list as $child => $child_sum ) {
+			$curr_delete_sum += $child_sum;
+		}
+	} else if ( $child_num == 2 ) {
+	} else if ( $child_num == 1 ) {
+		foreach ( $child_sum_list as $child => $child_sum ) {
+			$curr_delete_sum += $child_sum;
+		}
+	}
+	$delete_sum += $curr_delete_sum;
+	
+	return $childs_sum+1-$curr_delete_sum;
+}
+
+/* end */
+
+
+$in_contents = "";
+$out_contents = "";
+if ( $_FILES ) {
+	if (!move_uploaded_file($_FILES['userfile']['tmp_name'], $in_file_path)) die("move_uploaded_file error");
+	$in_contents = file_get_contents($in_file_path);
+	$in_contents = str_replace("\r", "", $in_contents);
+	$in_array = explode("\n", $in_contents);
+	$out_array = array();
+
+	/* begin */	
+	$line_cnt = 0;
+	$sample_cnt = $in_array[$line_cnt++];
+
+	$sample_array = array();
+	for ( $sample_idx = 0 ; $sample_idx < $sample_cnt ; $sample_idx++ ) {
+		
+		$sample = array();
+		$sample['line_cnt'] = $in_array[$line_cnt++];
+		for ( $i = 0 ; $i < $sample['line_cnt']-1 ; $i++ ) {
+			$n12 = explode(" ", $in_array[$line_cnt++]);
+			$sample['edge_list'][$n12[0]][$n12[1]] = true;
+			$sample['edge_list'][$n12[1]][$n12[0]] = true;
+			$sample['node_list'][$n12[0]] = true;
+			$sample['node_list'][$n12[1]] = true;
+		}
+		$sample_array[] = $sample;
+	}
+
+	for ( $i = 0 ; $i < count($sample_array) ; $i++ ) {
+		$sample = $sample_array[$i];
+
+		$min_delete_sum = -1;		
+		foreach ( array_keys($sample['node_list']) as $curr ) {
+			$prev = 0;
+			$child_delete_sum = 0;
+			delete_count($sample['edge_list'], $child_delete_sum, $prev, $curr);
+			if ( $min_delete_sum == -1 || $child_delete_sum < $min_delete_sum ) {
+				$min_delete_sum = $child_delete_sum;
+			}
+		}
+		$out_array[] = sprintf("Case #%d: %d", $i+1, $min_delete_sum);
+	}
+
+	/* end */	
+	
+	$out_contents = implode("\n", $out_array);
+	file_put_contents($out_file_path, $out_contents);
+} else {
+	if ( file_exists($in_file_path) ) $in_contents = file_get_contents($in_file_path);
+	if ( file_exists($out_file_path) ) $out_contents = file_get_contents($out_file_path);
+}
+
+echo "
+<table border=0 width=100%>
+  <tr>
+    <td valign='top'><a href='{$in_file_path}'>{$in_file_path}</a></td>
+    <td valign='top'><a href='{$out_file_path}'>{$out_file_path}</a></td>
+  </tr>
+  <tr>
+    <td valign='top'><pre>{$in_contents}</pre></td>
+    <td valign='top'><pre>{$out_contents}</pre></td>
+  </tr>
+</table>
+";
+

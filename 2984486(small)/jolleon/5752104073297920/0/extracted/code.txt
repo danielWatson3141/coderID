@@ -1,0 +1,61 @@
+from random import randint
+
+N = 1000
+def bad():
+    a = range(N)
+    for k in xrange(N):
+        p = randint(0, N-1)
+        a[k], a[p] = a[p], a[k]
+    return a
+
+def good():
+    a = range(N)
+    for k in xrange(N):
+        p = randint(k, N-1)
+        a[k], a[p] = a[p], a[k]
+    return a
+
+
+
+bads = [bad() for _ in xrange(10000)]
+goods = [good() for _ in xrange(10000)]
+
+
+avgbad = [sum([b[i] for b in bads]) / len(bads) for i in xrange(N)]
+avggood = [sum([g[i] for g in goods]) / len(goods) for i in xrange(N)]
+
+def smooth(l):
+    res = []
+    for i in xrange(N):
+        if i == 0:
+            res.append((l[0] + l[1]) / 2.)
+        elif i == N-1:
+            res.append((l[-2] + l[-1]) /2.)
+        elif i == 1 or i == N-2:
+            res.append((l[i-1] + l[i] + l[i+1])/3.)
+        else:
+            res.append((l[i-2] + l[i-1] + l[i] + l[i+1] + l[i+2])/5.)
+    return res
+
+smoothbad = smooth(avgbad)
+smoothgood = [500 for _ in range(1000)]
+
+def dist(x, y):
+    return sum((a-b) * (a-b) for (a,b) in zip(x, y))
+
+
+
+f = open('/Users/jolleon/Downloads/C-small-attempt0 (1).in')
+
+def readints(f):
+    return map(int, f.readline()[:-1].split())
+
+f.readline()
+for i in xrange(120):
+    f.readline()
+    perm = readints(f)
+    if dist(perm, smoothgood) > dist(perm, smoothbad):
+        print 'Case #%d: BAD' % (i+1)
+    else:
+        print 'Case #%d: GOOD' % (i+1)
+    
