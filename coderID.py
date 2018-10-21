@@ -1,6 +1,8 @@
 from cmd import Cmd
-from ProfileSet import *
+import ProfileSet
+#from FeatureSet import FeatureSet
 import pickle
+import os.path
 
 class MyPrompt(Cmd):
 
@@ -9,19 +11,23 @@ class MyPrompt(Cmd):
         if len(args)==0 :
             print("Must supply a filePath")
         else:
-            self.ps=ProfileSet(args[0])
+            self.ps=ProfileSet.ProfileSet(args[0])
 
-    def do_add(self, args):
-        """Add data from a new directory"""
+    def do_addAuthors(self, args):
+        """Add data from a new author directory, Duplicate Authors will be merged"""
         if len(args)==0 :
             print("Must supply a filePath")
-        elif len(args==1):
-            print("Adding a directory")
-            self.ps.merge(ProfileSet(args[0]))
         else:
-            print("Adding all")
-            for author in args:
-                self.ps.addAuthor(author)
+            print("Adding...")
+            for arg in args:
+                if os.path.isdir(arg):
+                    self.ps.addAuthorsDir(arg)
+                else:
+                    print("directoryNotFound")
+    
+    def addOne(self, args):
+        """Add one author from a file"""
+        self.ps.addAuthor(args[0])
 
     def do_merge(self, other):
         """Merge another profile set into the current one"""
@@ -29,7 +35,7 @@ class MyPrompt(Cmd):
             print("Must supply a filePath")
         else:
             print("Merging")
-            self.ps.merge(ProfileSet(other))
+            self.ps.merge(ProfileSet.ProfileSet(other))
     
     def do_save(self, file):
         """Saves state, overwriting given file"""
@@ -45,6 +51,28 @@ class MyPrompt(Cmd):
         """quits the program WITHOUT SAVING"""
         print("Quitting.")
         raise SystemExit
+
+    def do_featureDetect(self, args):
+        """runs feature detection"""
+        self.ps.detectFeatures()
+        self.featuresDetected = True
+    
+    def do_getFeatures(self, args):
+        if(self.featuresDetected):
+            return self.ps.toFeatureMatrix()
+        else:
+            print("Must run featureDetect first")
+
+    def do_display(self, args):
+        print("Features:")
+        print(self.ps)
+        
+        print("Authors:")
+        for author in self.ps.authors:
+            print(author)
+            
+
+        
 
 
 if __name__ == '__main__':
