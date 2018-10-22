@@ -28,15 +28,9 @@ class Feature:
     
     def normalizedResult(self):
         """Proper normalizer for this feature value. Only override this if normalizer is not log(x/length)"""
+        if self.featureCount == 0:
+            return 0
         return(log(self.featureCount/self.docLength))
-
-            
-class Word(Feature):
-        def __init__(self, word):
-            self.name = word
-        def evaluate(self, length):
-            """Only use this with wordSet"""
-            super(None, length)
 
 
 class FeatureSet:
@@ -44,8 +38,10 @@ class FeatureSet:
  
     def __init__(self, file=None):
         self.name = "Generic Set"
+        self.features = dict()
         if file==None:
-            self.features = deFeatures        
+            for featureName in deFeatures.keys():
+                self.addFeature(featureName)        
         else:
             self.fs = []
             for line in open(file).readlines():
@@ -53,11 +49,11 @@ class FeatureSet:
 
     def addFeature(self, featureToAdd):
         """Add a freshly constructed feature to the set"""
-        self.features.update(featureToAdd, deFeatures.get(featureToAdd)())
+        self.features.update({featureToAdd: deFeatures.get(featureToAdd)()})
 
     def addSubset(self, otherSet):
         """Add a contained subset. Will be evaluated with otherSet.eval before merging. For efficiency"""
-        self.features.update(otherSet.name, otherSet)
+        self.features.update({otherSet.name: otherSet})
 
     def merge(self, other):
         """Merge two feature sets. The result is the union, with matching features merged"""
@@ -74,13 +70,15 @@ class FeatureSet:
     def evaluate(self, file):
         """Default for feature set. ALL SUBCLASSES should override this"""
         filename, file_extension = os.path.splitext(file)
-        lang = file_extension
+        lang = file_extension[1:]
+        tokens=""
         if lang=="java":
             tokens = PPTools.Tokenize.java(file)
         elif lang=="cpp":
             tokens = PPTools.Tokenize.cpp(file)
-
+       
         contents = open(file,'r').read()
+
         for feature in self.features.values():
             if feature.inputType == "tokens":
                 feature.evaluate(tokens,len(contents))
@@ -91,7 +89,7 @@ class FeatureSet:
         """Returns feature vector as num[]"""
         vec = []
         for feature in self.features.values():
-            if feature is FeatureSet:
+            if isinstance(feature, FeatureSet):
                 vec.append(feature.getFeatureVector())
             else:
                 vec.append(feature.normalizedResult())
@@ -103,12 +101,22 @@ class wordSet(FeatureSet):
     name = "wordSet"
     def evaluate(self, tokens, length):
         for token in tokens:
-            if token.spelling() in self.features.keys():
-                f = self.features.get(token.spelling())
-                f.featureCount+=1
+            try:
+                if token.spelling in self.features.keys():
+                    f = self.features.get(token.spelling)
+                    f.featureCount+=1
+            except UnicodeDecodeError:
+                #print("Failed to parse char")
+                continue
 
-        for feature in self.features:
-                feature.evaluate(length)
+        for feature in self.features.values():
+                feature.evaluate("",length)
+
+class Word(Feature):
+        def __init__(self, word):
+            super().__init__()
+            self.name = word
+        
 
 class keyWordCount(wordSet):
     name = "keyWordCount"

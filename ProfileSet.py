@@ -10,14 +10,29 @@ class ProfileSet:
         self.fileSource = file
         self.cfg = config
         self.language = lang
+        self.fileCount = 0
         if os.path.isfile(file):
             self.merge(pickle.Unpickler(file).load)
         else:
             self.authors = dict()
 
     def addAuthorsDir(self, topDir):
-        for dir in os.listdir(topDir):
+        preAuthCount = self.authCount()
+        preFileCount = self.fileCount
+
+        dirs = ProfileSet.listdir_fullpath(topDir)
+        for dir in dirs:
             self.addAuthor(dir)
+
+        print("Added "+str(self.fileCount-preFileCount)+" files from "+str(self.authCount())+" authors.")
+
+    def authCount(self):
+        return len(self.authors)
+
+
+    @staticmethod
+    def listdir_fullpath(d):
+        return [os.path.join(d, f) for f in os.listdir(d)]
 
     def merge(self, otherPS):
         self.authors = self.authors+otherPS.authors
@@ -25,34 +40,35 @@ class ProfileSet:
     def addAuthor(self, dir):
         nAuth = Author(dir,self.cfg, self.language)
         if len(nAuth.docs)==0:
-            print("No docs of type "+self.language+" found in "+dir)
+            #print("No docs of type "+self.language+" found in "+dir)
             return
         if os.path.basename not in self.authors:
-            self.authors.update(os.path.basename(dir),nAuth)
+            self.fileCount += len(nAuth.docs)
+            self.authors.update({os.path.basename(dir):nAuth})
         else:
             self.authors.get(dir).merge(nAuth)
         
 
 
     def detectFeatures(self):
-        for author in self.authors:
+        for author in self.authors.values():
             author.collectForAllDocs()
 
     def toFeatureMatrix(self):
         target = []
         targetNum=0
         mat = []
-        for author in self.authors :
+        for author in self.authors.values() :
             mat.append(author.featureMatrix())
             for _ in range(len(author.docs)):
                 target.append(targetNum)
             targetNum+=1
         
-        return mat, target
+        return sum(mat,[]), target
 
     def __str__(self):
         if self.cfg==None:
-            return str(PPTools.Default.featureSet.keys).replace(",","\n")
+            return str(FeatureSet.deFeatures.keys()).replace(",","\n")
         else:
             return str(FeatureSet.FeatureSet(self.cfg)).replace(",","\n")
             
@@ -65,11 +81,17 @@ class Author:
         self.docs = []
         self.cfg=cfg
         self.language = lang
-        for root, dirs, files in os.walk(".", topdown=False):
+        for root, dirs, files in os.walk(dir, topdown=False):
             for name in files:
+                fullPath = os.path.join(root, name)
                 if lang in name:
+                    try:
+                        contents = open(fullPath,'r').read()
+                    except UnicodeDecodeError:
+                        continue
+                     #print("Assembling profile for author "+authName)
                     self.docs.append(Document(os.path.join(root, name), cfg))
-        #print("Assembling profile for author "+authName)
+                       
 
     def addDoc(self, file):
         self.docs.append(Document(file, self.cfg))
@@ -78,13 +100,14 @@ class Author:
         self.docs.append(other.docs)
 
     def collectForAllDocs(self):
+        print("Collecting for "+self.authName)
         for doc in self.docs:
-            doc.collect
+            doc.collect()
 
     def featureMatrix(self):
-        featureMat = []
+        featureMat = list()
         for i in range(1, len(self.docs)):
-            featureMat [i] = self.docs[i].getFeatureVector()
+            featureMat.append(self.docs[i].featureVector())
         return featureMat
 
     def __str__(self):
@@ -96,6 +119,7 @@ class Author:
 
 class Document:
     def __init__(self, file, cfg=None):
+        
         self.name = os.path.basename(file)
         self.fileSource = file
         self.featureSet = FeatureSet.FeatureSet(cfg)
@@ -104,7 +128,10 @@ class Document:
         self.featureSet.evaluate(self.fileSource)
 
     def featureVector(self):
-        self.featureSet.getFeatureVector()
+        return self.featureSet.getFeatureVector()
+
+    def __str__(self):
+        return self.name
     
     
 

@@ -21,6 +21,8 @@ class Tokenize:
     def java(file):
         print("Java not yet implemented")
         return " "
+
+    cindex.Config.set_library_file('C:/Program Files/LLVM/bin/libclang.dll')
     @staticmethod    
     def cpp(file):
         idx = cindex.Index.create()

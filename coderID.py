@@ -6,28 +6,38 @@ import os.path
 
 class MyPrompt(Cmd):
 
-    def do_init(self, args):
+    def do_init(self, filePath):
         """Initialize profile set. non-existent file will create new  args: filePath"""
-        if len(args)==0 :
-            print("Must supply a filePath")
-        else:
-            self.ps=ProfileSet.ProfileSet(args[0])
+        if filePath == '':
+            filePath =  'c:\swAuthors\default.ps'
 
-    def do_addAuthors(self, args):
+        if os.path.isfile(filePath) or not os.path.exists(filePath):
+            self.ps=ProfileSet.ProfileSet(filePath)
+        else:
+            print("Please supply a path to either an existing file or where you want the new file to be")
+
+        self.homeFilePath =filePath
+
+        for file in ProfileSet.ProfileSet.listdir_fullpath(os.path.dirname(self.homeFilePath)):
+            if(file[len(file)-1]=='!'):
+                self.do_addAuthors(file)
+
+        
+
+    def do_addAuthors(self, filePath):
         """Add data from a new author directory, Duplicate Authors will be merged"""
-        if len(args)==0 :
+        if len(filePath)==0 :
             print("Must supply a filePath")
         else:
             print("Adding...")
-            for arg in args:
-                if os.path.isdir(arg):
-                    self.ps.addAuthorsDir(arg)
-                else:
-                    print("directoryNotFound")
+            if os.path.isdir(filePath):
+                self.ps.addAuthorsDir(filePath)
+            else:
+                print("directoryNotFound")
     
-    def addOne(self, args):
+    def addOne(self, authorName):
         """Add one author from a file"""
-        self.ps.addAuthor(args[0])
+        self.ps.addAuthor(authorName)
 
     def do_merge(self, other):
         """Merge another profile set into the current one"""
@@ -37,8 +47,11 @@ class MyPrompt(Cmd):
             print("Merging")
             self.ps.merge(ProfileSet.ProfileSet(other))
     
-    def do_save(self, file):
+    def do_save(self, file=None):
         """Saves state, overwriting given file"""
+        if file == None:
+            self.homeFilePath
+        
         print("saving...")
         if(file is None):
             file = self.ps.fileSource
@@ -54,21 +67,22 @@ class MyPrompt(Cmd):
 
     def do_featureDetect(self, args):
         """runs feature detection"""
+        print("Collecting...")
         self.ps.detectFeatures()
         self.featuresDetected = True
     
     def do_getFeatures(self, args):
         if(self.featuresDetected):
-            return self.ps.toFeatureMatrix()
+           print(self.ps.toFeatureMatrix())
         else:
             print("Must run featureDetect first")
 
-    def do_display(self, args):
+    def do_displayFeatures(self, args):
         print("Features:")
         print(self.ps)
-        
+    def do_displayAuthors(self, args):
         print("Authors:")
-        for author in self.ps.authors:
+        for author in self.ps.authors.values():
             print(author)
             
 
