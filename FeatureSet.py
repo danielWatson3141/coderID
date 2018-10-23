@@ -2,20 +2,19 @@ import PPTools
 import os.path
 from math import log
 
-
+from sklearn.feature_extraction.text import CountVectorizer
 
 class Feature:
 
-    def __init__(self):
+    def __init__(self, name):
         self.featureCount=0
         self.docLength=0
-        self.name = None
+        self.name = name
         self.inputType = "tokens"
 
-    def evaluate(self, input, len):
+    def evaluate(self, input):
         """Observe feature over document, keeping raw counts with no averaging or log scaling applied. 
         Only call this method once unless you intend to merge files."""
-        self.docLength+=len
         pass      
         
     def merge(self, feature):
@@ -33,12 +32,13 @@ class Feature:
         return(log(self.featureCount/self.docLength))
 
 
-class FeatureSet:
-    #associate names of features with the appropriate class here    
+class FeatureSet(Feature):
+       
  
     def __init__(self, file=None):
-        self.name = "Generic Set"
+        self.name = "Generic Set" 
         self.features = dict()
+        self.inputType = "file"
         if file==None:
             for featureName in deFeatures.keys():
                 self.addFeature(featureName)        
@@ -51,10 +51,7 @@ class FeatureSet:
         """Add a freshly constructed feature to the set"""
         self.features.update({featureToAdd: deFeatures.get(featureToAdd)()})
 
-    def addSubset(self, otherSet):
-        """Add a contained subset. Will be evaluated with otherSet.eval before merging. For efficiency"""
-        self.features.update({otherSet.name: otherSet})
-
+    
     def merge(self, other):
         """Merge two feature sets. The result is the union, with matching features merged"""
         myFeat = self.features
@@ -69,6 +66,7 @@ class FeatureSet:
 
     def evaluate(self, file):
         """Default for feature set. ALL SUBCLASSES should override this"""
+        
         filename, file_extension = os.path.splitext(file)
         lang = file_extension[1:]
         tokens=""
@@ -81,9 +79,11 @@ class FeatureSet:
 
         for feature in self.features.values():
             if feature.inputType == "tokens":
-                feature.evaluate(tokens,len(contents))
+                feature.evaluate(tokens)
             elif feature.inputType == "docText":
-                feature.evaluate(contents, len(contents))
+                feature.evaluate(contents)
+            elif feature.inputType == "file":
+                feature.evaluate(file)
 
     def getFeatureVector(self):
         """Returns feature vector as num[]"""
@@ -99,10 +99,14 @@ class FeatureSet:
 class wordSet(FeatureSet):
     inputType = "tokens"
     name = "wordSet"
-    def evaluate(self, tokens, length):
+    def __init__(self):
+        pass
+
+
+    def evaluate(self, tokens):
         for token in tokens:
             try:
-                if token.spelling in self.features.keys():
+                if token.spelling in self.features:
                     f = self.features.get(token.spelling)
                     f.featureCount+=1
             except UnicodeDecodeError:
@@ -110,40 +114,18 @@ class wordSet(FeatureSet):
                 continue
 
         for feature in self.features.values():
-                feature.evaluate("",length)
+                feature.evaluate("",len(tokens))
 
-class Word(Feature):
-        def __init__(self, word):
-            super().__init__()
-            self.name = word
+
         
 
 class keyWordCount(wordSet):
+    #associate names of features with the appropriate class here 
     name = "keyWordCount"
     def __init__(self):
-        self.features = {"do": Word("do"),
-                    "else-if": Word("else-if"),
-                            "if": Word("if"),
-                        "else": Word("else"),
-                        "switch": Word("switch"),
-                        "for": Word("for"),
-                        "while": Word("while")}
-                        
+        self.features = {"do","else-if","if","else","switch","for","while"}
+        
 
 deFeatures = {
         "keyWordCount": keyWordCount
     }
-
-
-
-
-
-            
-       
-
-    
-
-
-    
-
-

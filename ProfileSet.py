@@ -2,7 +2,9 @@ import os.path
 import pickle
 import FeatureSet
 import PPTools
+from sklearn.feature_extraction.text import CountVectorizer
 from os import walk
+from numpy import ndarray
 
 class ProfileSet:
     
@@ -11,8 +13,11 @@ class ProfileSet:
         self.cfg = config
         self.language = lang
         self.fileCount = 0
+        self.docs = []
         if os.path.isfile(file):
-            self.merge(pickle.Unpickler(file).load)
+            file = open(file, 'rb')
+            self.authors = dict()
+            self.merge(pickle.Unpickler(file).load())
         else:
             self.authors = dict()
 
@@ -23,8 +28,9 @@ class ProfileSet:
         dirs = ProfileSet.listdir_fullpath(topDir)
         for dir in dirs:
             self.addAuthor(dir)
+           
 
-        print("Added "+str(self.fileCount-preFileCount)+" files from "+str(self.authCount())+" authors.")
+        print("Added "+str(self.fileCount-preFileCount)+" files from "+str(self.authCount()-preAuthCount)+" authors.")
 
     def authCount(self):
         return len(self.authors)
@@ -35,24 +41,55 @@ class ProfileSet:
         return [os.path.join(d, f) for f in os.listdir(d)]
 
     def merge(self, otherPS):
-        self.authors = self.authors+otherPS.authors
+        old = self.authors
+        new = otherPS.authors
 
+        new.update(old)
+        self.authors = new
+
+        
     def addAuthor(self, dir):
         nAuth = Author(dir,self.cfg, self.language)
         if len(nAuth.docs)==0:
             #print("No docs of type "+self.language+" found in "+dir)
             return
-        if os.path.basename not in self.authors:
+        if os.path.basename(dir) not in self.authors:
+            self.docs=self.docs+nAuth.docs
             self.fileCount += len(nAuth.docs)
             self.authors.update({os.path.basename(dir):nAuth})
         else:
-            self.authors.get(dir).merge(nAuth)
+            self.docs=self.docs+nAuth.docs
+            self.fileCount += len(nAuth.docs) - len(self.authors.get(os.path.basename(dir)).docs)
+            self.authors.get(os.path.basename(dir)).merge(nAuth)
+            print("author "+dir+" was merged.")
         
 
 
     def detectFeatures(self):
-        for author in self.authors.values():
-            author.collectForAllDocs()
+        
+        inputs=[]
+        for doc in self.docs:
+            inputs.append(PPTools.Tokenize.tokenize(doc.fileSource))
+
+        for i in range(0,len(inputs)):
+            inputs[i] = self.tokensToText(inputs[i])
+
+        print("Vectorizing...")
+        
+        vectorizer = CountVectorizer(analyzer="word", token_pattern="\S*", decode_error="ignore", lowercase=False)
+        counts = vectorizer.fit_transform(inputs)
+        self.counts = counts
+            
+            #should fit feature detector here
+            #then pass it down
+
+    @staticmethod
+    def tokensToText(tokens):
+        returnString = ""
+        for token in tokens:
+            returnString=returnString+token.spelling+ " "
+
+        return returnString
 
     def toFeatureMatrix(self):
         target = []
@@ -101,9 +138,8 @@ class Author:
 
     def collectForAllDocs(self):
         print("Collecting for "+self.authName)
-        for doc in self.docs:
-            doc.collect()
-
+        #fit_transform(docs, )
+        
     def featureMatrix(self):
         featureMat = list()
         for i in range(1, len(self.docs)):
@@ -132,8 +168,3 @@ class Document:
 
     def __str__(self):
         return self.name
-    
-    
-
-
-  

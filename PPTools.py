@@ -1,5 +1,4 @@
-
-import FeatureSet
+import os.path
 from clang import cindex
 
 class PreProcessor:
@@ -17,6 +16,18 @@ class Filter:
         pass
 
 class Tokenize:
+
+    @staticmethod
+    def tokenize(file):
+        filename, file_extension = os.path.splitext(file)
+        lang = file_extension[1:]
+        tokens=""
+        if lang=="java":
+            tokens = Tokenize.java(file)
+        elif lang=="cpp":
+            tokens = Tokenize.cpp(file)
+        return tokens
+
     @staticmethod
     def java(file):
         print("Java not yet implemented")

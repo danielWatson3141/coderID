@@ -10,6 +10,7 @@ class MyPrompt(Cmd):
         """Initialize profile set. non-existent file will create new  args: filePath"""
         if filePath == '':
             filePath =  'c:\swAuthors\default.ps'
+            print("Defaulted to: "+filePath)
 
         if os.path.isfile(filePath) or not os.path.exists(filePath):
             self.ps=ProfileSet.ProfileSet(filePath)
@@ -47,17 +48,22 @@ class MyPrompt(Cmd):
             print("Merging")
             self.ps.merge(ProfileSet.ProfileSet(other))
     
-    def do_save(self, file=None):
+    def do_save(self, filepath=''):
         """Saves state, overwriting given file"""
-        if file == None:
-            self.homeFilePath
         
         print("saving...")
-        if(file is None):
-            file = self.ps.fileSource
+        if(filepath is ''):
+            filepath = self.homeFilePath
+        else:
+            self.homeFilePath = filepath 
+        file = open(self.homeFilePath, 'wb')
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
         pickler.dump(self.ps)
-        print("Saved to "+file)
+        print("Saved to "+self.homeFilePath)
+
+    def do_load(self, args):
+        if(os.path.isfile(args))
+            self.ps.merge(ProfileSet(args))
 
 
     def do_quit(self, args):
@@ -84,6 +90,8 @@ class MyPrompt(Cmd):
         print("Authors:")
         for author in self.ps.authors.values():
             print(author)
+    def do_displayCounts(self,args):
+        print(self.ps.counts)
             
 
         
