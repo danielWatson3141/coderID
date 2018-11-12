@@ -1,8 +1,8 @@
 import os.path
 import pickle
-import FeatureSet
+#import FeatureSet
 import PPTools
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from os import walk
 from numpy import ndarray
 
@@ -14,26 +14,46 @@ class ProfileSet:
         self.language = lang
         self.fileCount = 0
         self.docs = []
-        if os.path.isfile(file):
-            file = open(file, 'rb')
-            self.authors = dict()
-            self.merge(pickle.Unpickler(file).load())
-        else:
-            self.authors = dict()
+        self.authors = dict()
+        self.featureDetected=False
 
     def addAuthorsDir(self, topDir):
-        preAuthCount = self.authCount()
         preFileCount = self.fileCount
 
         dirs = ProfileSet.listdir_fullpath(topDir)
         for dir in dirs:
-            self.addAuthor(dir)
-           
+            try:
+                self.addAuthor(dir)
+            except TypeError:
+                dirs.extend(ProfileSet.listdir_fullpath(dir))
 
-        print("Added "+str(self.fileCount-preFileCount)+" files from "+str(self.authCount()-preAuthCount)+" authors.")
+        print("Added "+str(self.fileCount-preFileCount)+" files from "+str(len(dirs))+" authors.")
 
     def authCount(self):
         return len(self.authors)
+
+    def pruneAuthors(self,n, k):
+        myCopy = self.authors.copy()
+        for pair in myCopy.items():
+            if len(pair[1].docs) < int(k):
+                for doc in pair[1].docs:
+                    self.docs.remove(doc)
+                del self.authors[pair[0]]
+        
+        myCopy = self.authors.copy()
+        import operator
+        topNAuthors = sorted(myCopy.items(), key=operator.itemgetter(1), reverse=True)[:n]
+        for pair in myCopy.items():
+            if pair not in topNAuthors:
+                for doc in pair[1].docs:
+                    self.docs.remove(doc)
+                del self.authors[pair[0]]
+
+    def pruneFeatures(self):
+        from sklearn import feature_selection
+        self.counts = feature_selection.SelectKBest(feature_selection.mutual_info_classif,k=1000).fit_transform(self.counts,self.target)
+                        
+
 
 
     @staticmethod
@@ -59,9 +79,17 @@ class ProfileSet:
             self.authors.update({os.path.basename(dir):nAuth})
         else:
             self.docs=self.docs+nAuth.docs
-            self.fileCount += len(nAuth.docs) - len(self.authors.get(os.path.basename(dir)).docs)
+            self.fileCount += len(nAuth.docs)
             self.authors.get(os.path.basename(dir)).merge(nAuth)
-            print("author "+dir+" was merged.")
+            #print("author "+dir+" was merged.")
+
+    def fileConcat(self):
+        self.docs =[]
+        for author in self.authors.values():
+            author.fileConcat()
+            self.docs.extend(author.docs)
+
+        
         
 
 
@@ -69,17 +97,26 @@ class ProfileSet:
         
         inputs=[]
         for doc in self.docs:
-            inputs.append(PPTools.Tokenize.tokenize(doc.fileSource))
+            inputs.append(PPTools.Tokenize.tokenize(doc))
 
         for i in range(0,len(inputs)):
             inputs[i] = self.tokensToText(inputs[i])
 
         print("Vectorizing...")
         
-        vectorizer = CountVectorizer(analyzer="word", token_pattern="\S*", decode_error="ignore", lowercase=False)
-        counts = vectorizer.fit_transform(inputs)
+        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*", decode_error="ignore", lowercase=False)
+        vectorizer.fit(inputs)
+        counts = vectorizer.transform(inputs)
         self.counts = counts
-            
+        self.terms = vectorizer.get_feature_names()
+
+        self.target = []
+        
+        targetNum = 1
+        for author in self.authors.values() :
+            for _ in range(len(author.docs)):
+                self.target.append(author.authName)
+            targetNum+=1
             #should fit feature detector here
             #then pass it down
 
@@ -87,30 +124,12 @@ class ProfileSet:
     def tokensToText(tokens):
         returnString = ""
         for token in tokens:
-            returnString=returnString+token.spelling+ " "
+            try:
+                returnString=returnString+token.spelling+ " "
+            except UnicodeDecodeError:
+                continue
 
         return returnString
-
-    def toFeatureMatrix(self):
-        target = []
-        targetNum=0
-        mat = []
-        for author in self.authors.values() :
-            mat.append(author.featureMatrix())
-            for _ in range(len(author.docs)):
-                target.append(targetNum)
-            targetNum+=1
-        
-        return sum(mat,[]), target
-
-    def __str__(self):
-        if self.cfg==None:
-            return str(FeatureSet.deFeatures.keys()).replace(",","\n")
-        else:
-            return str(FeatureSet.FeatureSet(self.cfg)).replace(",","\n")
-            
-
-    
 
 class Author:
     def __init__(self, dir, cfg=None, lang="cpp"):
@@ -118,53 +137,84 @@ class Author:
         self.docs = []
         self.cfg=cfg
         self.language = lang
+
         for root, dirs, files in os.walk(dir, topdown=False):
             for name in files:
                 fullPath = os.path.join(root, name)
                 if lang in name:
                     try:
-                        contents = open(fullPath,'r').read()
+                        open(fullPath,'r').read()    #Check for error reading file here.
                     except UnicodeDecodeError:
                         continue
                      #print("Assembling profile for author "+authName)
-                    self.docs.append(Document(os.path.join(root, name), cfg))
+                    self.docs.append(os.path.join(root, name))
                        
 
     def addDoc(self, file):
-        self.docs.append(Document(file, self.cfg))
+        self.docs.append(file)
     
     def merge(self, other):
-        self.docs.append(other.docs)
-
-    def collectForAllDocs(self):
-        print("Collecting for "+self.authName)
-        #fit_transform(docs, )
+        self.docs.extend(other.docs)
         
-    def featureMatrix(self):
-        featureMat = list()
-        for i in range(1, len(self.docs)):
-            featureMat.append(self.docs[i].featureVector())
-        return featureMat
-
     def __str__(self):
         toRet = self.authName+":\n"
         for doc in self.docs:
-            toRet += "\t"+doc.name+"\n"
+            toRet += "\t"+str(doc)+"\n"
         return toRet
 
+    def __lt__(self, other):
+        return len(self.docs) < len(other.docs)
 
-class Document:
-    def __init__(self, file, cfg=None):
-        
-        self.name = os.path.basename(file)
-        self.fileSource = file
-        self.featureSet = FeatureSet.FeatureSet(cfg)
+    def fileConcat(self):
+        """irreversable. Joins files in the same solution to be a single file and deletes the originals."""
+        newdocs = []
+        try:
+            for filePath in self.docs:
+                fileset = ProfileSet.listdir_fullpath(os.path.dirname(filePath))
+                if len(fileset) <= 1:
+                    newdocs.append(filePath)
+                    continue
+                outfilename = ""
+                for file in fileset:
+                    filename, file_extension = os.path.splitext(file)
+                    outfilename = outfilename+"+"+os.path.basename(filename)[:-4]
+                
+                outfilename = outfilename+"."+self.language
 
-    def collect(self):
-        self.featureSet.evaluate(self.fileSource)
+                if os._exists(outfilename):
+                    continue
 
-    def featureVector(self):
-        return self.featureSet.getFeatureVector()
+                newdocs.append(outfilename)
 
-    def __str__(self):
-        return self.name
+                with open(outfilename, 'w') as outfile:
+                    for fname in fileset:
+                        with open(fname, 'r') as readfile:
+                            outfile.write(readfile.read() + "\n\n")
+        except Exception:
+            print(Exception.__traceback__)
+            print("Something went wrong, No changes made.")
+            return
+        for doc in self.docs:
+            if doc not in newdocs:
+                os.remove(doc)
+        self.docs=newdocs
+                        
+
+    
+    @staticmethod
+    def is_number(s):
+        try:
+            float(s)
+            return True
+        except ValueError:
+            pass
+    
+        try:
+            import unicodedata
+            unicodedata.numeric(s)
+            return True
+        except (TypeError, ValueError):
+            pass
+    
+        return False    
+

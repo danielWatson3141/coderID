@@ -11,9 +11,7 @@ class PreProcessor:
 
         return contents
 
-class Filter:
-    def apply(self, docStr):
-        pass
+
 
 class Tokenize:
 
