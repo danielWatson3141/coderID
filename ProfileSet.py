@@ -89,10 +89,6 @@ class ProfileSet:
             author.fileConcat()
             self.docs.extend(author.docs)
 
-        
-        
-
-
     def detectFeatures(self):
         
         inputs=[]
@@ -100,7 +96,7 @@ class ProfileSet:
             inputs.append(PPTools.Tokenize.tokenize(doc))
 
         for i in range(0,len(inputs)):
-            inputs[i] = self.tokensToText(inputs[i])
+            inputs[i] = PPTools.Tokenize.tokensToText(inputs[i])
 
         print("Vectorizing...")
         
@@ -119,17 +115,6 @@ class ProfileSet:
             targetNum+=1
             #should fit feature detector here
             #then pass it down
-
-    @staticmethod
-    def tokensToText(tokens):
-        returnString = ""
-        for token in tokens:
-            try:
-                returnString=returnString+token.spelling+ " "
-            except UnicodeDecodeError:
-                continue
-
-        return returnString
 
 class Author:
     def __init__(self, dir, cfg=None, lang="cpp"):
