@@ -78,6 +78,7 @@ class MyPrompt(Cmd):
         print("Quitting.")
         raise SystemExit
 
+
     def do_featureDetect(self, args):
         """runs feature detection"""
         print("Collecting...")
@@ -341,8 +342,10 @@ class MyPrompt(Cmd):
                 self.do_loadGit(repos[i])
 
     def do_compile(self, args):
-        self.gitProfileSet.compileAuthors()
-        self.gitProfileSet.extractForAuthors()
+        self.gitProfileSet.compileAuthors()  
+        print("Compilation Complete")
+        
+        #self.gitProfileSet.extractForAuthors()
         #self.do_save("")
         #self.do_load("")  #to fix the threadSpawning bug
 
