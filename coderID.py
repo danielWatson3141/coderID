@@ -62,7 +62,7 @@ class MyPrompt(Cmd):
         file = open(self.homeFilePath, 'wb')
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
         import copy
-        pickler.dump((self.ps, self.gitProfileSet)) #save after Compile may be broken by this
+        pickler.dump((self.ps, copy.deepcopy(self.gitProfileSet))) #save after Compile may be broken by this
         print("Saved to "+self.homeFilePath)
 
     def do_load(self, args):
