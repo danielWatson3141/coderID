@@ -4,8 +4,10 @@ import PPTools
 from sklearn.feature_extraction.text import TfidfVectorizer
 import multiprocessing
 from collections import Counter
+import numpy as np
 import time
 import queue
+import re
 
 
 
@@ -58,7 +60,6 @@ class gitProfileSet:
         commitList = miner.traverse_commits()
         
         tipeCounts = dict()
-
         for commit in commitList:
             tipe = commitType.categorize(commit)
 
@@ -193,15 +194,66 @@ class gitProfileSet:
         for value in self.authors.values():
             print(value)
 
+    def createLexicalFeaturesTokens(self, token_counts):
+        # change this to directly modify feature matrix
+        fn_len = 0 # function length, not including whitespace
+        num_keyword = 0
+        num_word_tokens = 0
+        # TODO: need to expand this outside of C++
+        # include break, continue, etc.?
+        KEYWORDS = set('do', 'if', 'else', 'switch', 'for', 'while')
+        for k, v in token_counts.items():
+            fn_len += len(k) * v
+            if k in KEYWORDS:
+                num_keyword += v
+            if k.isalnum() and not k.isdigit(): # only words
+                num_word_tokens += v
+
+        return [1.0 * np.array([num_keyword, num_word_tokens]), fn_len]
+
+
+    def createLexicalFeaturesFunctions(self, text):
+        line_lengths = []
+        num_comments = 0
+        num_ternary = 0
+        num_macros = 0
+
+        for line in text.splitlines():
+            line_lengths.append(len(line))
+            # comments - need to account for str literals containing these vals
+            if '//' in line or line.startswith('/*'):
+                num_comments += 1
+
+            if line.startswith('#'): # macros
+                num_macros += 1
+
+            m = re.search("(.+=.+\?.+:.+;)", line)
+            if m is None: # no ternary operator
+                num_ternary += 1
+
+        return 1.0 * np.array([np.mean(line_lengths), np.std(line_lengths),
+                               num_ternary, num_comments, num_macros])
+
     def getFeatures(self):
         inputs=[]
+        lexical_features = []
         self.target = []
-        print("Tokenizing...")
+        print("Tokenizing...") # generating tokens/unigrams
         for author in self.authors.values():
             for fun in author.functions:
-                inputs.append(PPTools.Tokenize.fun(fun))
+                tokens = PPTools.Tokenize.fun(fun)
                 self.target.append(author.name)
-        print("Textifying...")
+
+                lex_feat_tok = self.createLexicalFeaturesTokens(Counter(tokens))
+                lex_feat_fn = self.createLexicalFeaturesFunctions(fun)
+                fn_len = lex_feat_tok[1]
+
+                lex_feat_tok = np.log(lex_feat_tok[0] / fn_len)
+                lex_feat_fn[2:] = np.log(lex_feat_fn[2:] / fn_len)
+                lexical_features.append(lex_feat_tok + lex_feat_fn)
+
+                inputs.append(tokens)
+        print("Textifying...") # converting back to a document
         for i in range(0,len(inputs)):
             inputs[i] = PPTools.Tokenize.tokensToText(inputs[i])
 
