@@ -1,4 +1,5 @@
 import os.path
+import javalang
 from clang import cindex
 
 class PreProcessor:
@@ -16,8 +17,8 @@ class PreProcessor:
 class Tokenize:
 
     #TODO: Make linux-worthy
-    if not cindex.Config.loaded:
-        cindex.Config.set_library_file('C:/Program Files/LLVM/bin/libclang.dll')
+    #if not cindex.Config.loaded:
+    #    cindex.Config.set_library_file('C:/Program Files/LLVM/bin/libclang.dll')
        
 
     @staticmethod
@@ -70,7 +71,7 @@ class Tokenize:
         tokenStrings = map(lambda x: x.spelling, tokens)
         return " ".join(tokenStrings)
 
-    import javalang
+    
     @staticmethod
     def java(file):
         print("Java not yet implemented")

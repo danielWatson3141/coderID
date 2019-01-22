@@ -9,7 +9,7 @@ class featureExtractors:
     featureNames = charfeatureNames + tokfeatureNames + astfeatureNames
 
     @staticmethod
-    def characterLevel(function:str):
+    def characterLevel(function):
         """ returns row vector in scipy.sparse.csr_matrix row format of features extracted from function string"""
         return csr_matrix(0, shape = (1, 1))    #singleton 0 as default
     @staticmethod

@@ -8,16 +8,17 @@ from numpy import ndarray
 
 class ProfileSet:
     
-    def __init__(self, file, lang="cpp", config=None):
-        self.fileSource = file
+    def __init__(self, lang="cpp", config=None):
+        
         self.cfg = config
         self.language = lang
         self.fileCount = 0
         self.docs = []
         self.authors = dict()
-        self.featureDetected=False
+        self.featuresDetected=False
 
     def addAuthorsDir(self, topDir):
+        """Take a directory of directories, each of which contains an author's work"""
         preFileCount = self.fileCount
 
         dirs = ProfileSet.listdir_fullpath(topDir)
@@ -69,6 +70,7 @@ class ProfileSet:
 
         
     def addAuthor(self, dir):
+        print("Trying to build author: "+dir)
         nAuth = Author(dir,self.cfg, self.language)
         if len(nAuth.docs)==0:
             #print("No docs of type "+self.language+" found in "+dir)
@@ -115,6 +117,8 @@ class ProfileSet:
             targetNum+=1
             #should fit feature detector here
             #then pass it down
+        
+        self.featuresDetected = True
 
 class Author:
     def __init__(self, dir, cfg=None, lang="cpp"):
@@ -126,12 +130,14 @@ class Author:
         for root, dirs, files in os.walk(dir, topdown=False):
             for name in files:
                 fullPath = os.path.join(root, name)
-                if lang in name:
+                #print(name)
+                if "cpp" in name:
                     try:
                         open(fullPath,'r').read()    #Check for error reading file here.
                     except UnicodeDecodeError:
                         continue
                      #print("Assembling profile for author "+authName)
+                    #print("Got "+name)
                     self.docs.append(os.path.join(root, name))
                        
 
@@ -176,7 +182,7 @@ class Author:
                         with open(fname, 'r') as readfile:
                             outfile.write(readfile.read() + "\n\n")
         except Exception:
-            print(Exception.__traceback__)
+            print(Exception)
             print("Something went wrong, No changes made.")
             return
         for doc in self.docs:

@@ -4,7 +4,6 @@ import pickle
 import os
 import zipfile
 import string
-import gitProfileSet
 import ProfileSet
 
 class MyPrompt(Cmd):
@@ -12,7 +11,7 @@ class MyPrompt(Cmd):
     #TODO: make more OO.
     #TODO: remove class variable access
     #TODO: move utils into PPTools
-    #TODO: task queue-ify execution
+    
 
     def do_init(self, filePath):
         """Initialize profile set. non-existent file will create new  args: filePath"""
@@ -32,24 +31,9 @@ class MyPrompt(Cmd):
                 os.remove(filePath)
 
         self.ps=ProfileSet.ProfileSet(filePath)
-        self.gitProfileSet = gitProfileSet.gitProfileSet()
         self.homeFilePath =filePath
         print("Home filepath is "+filePath)
 
-    def do_addAuthors(self, filePath):
-        """Add data from a new author directory, Duplicate Authors will be merged. This is obsolute use zip extract instead"""
-        if len(filePath)==0 :
-            filePath = "c:/swAuthors/extractionTarget/gcj/"
-        else:
-            filePath=filePath+"/gcj/"
-        
-        print("Adding...")
-        if os.path.isdir(filePath):
-            for subdir in self.ps.listdir_fullpath(filePath):
-                self.ps.addAuthorsDir(subdir)
-        else:
-            print("directoryNotFound")
-    
     def do_save(self, filepath=''):
         """Saves state, overwriting given file"""
         
@@ -73,20 +57,30 @@ class MyPrompt(Cmd):
             file = open(args, 'rb')
             self.ps, self.gitProfileSet = pickle.Unpickler(file).load() #load
 
+        #self.do_displayGitAuthors("")
     def do_quit(self, args):
         """quits the program WITHOUT SAVING"""
         print("Quitting.")
         raise SystemExit
 
+    def do_collect(self, args):
+        """gathers info from extracted gcj directory. Pulls everything. Use zipSearch for partial extraction or extract full gcj.zip. Overwrites existing set"""
+        currentDir = args.strip()
 
-    def do_featureDetect(self, args):
-        """runs feature detection"""
-        print("Collecting...")
-        self.ps.detectFeatures()
-        #print("Pruning Features")
-        #self.ps.pruneFeatures()
-        self.ps.featuresDetected = True
+        try:
+            while not os.path.basename(currentDir) == "gcj":
+                currentDir = currentDir+"/"+os.listdir(currentDir)[0]
+        except Exception:
+            print("Failed. target should be superdirectory of one ../gcj/.. directory")
 
+        self.ps = ProfileSet.ProfileSet()
+        
+        for numberedFolder in os.listdir(currentDir):
+            self.ps.addAuthorsDir(currentDir+"/"+numberedFolder)
+
+    
+
+    #TODO: fix
     def do_displayFeatures(self, args):
         print("Features:")
         print(self.ps)
@@ -115,7 +109,10 @@ class MyPrompt(Cmd):
         else:
             zip = args
         print("Loading Zip...")
-        self.zfile = zipfile.ZipFile(zip)
+        try:
+            self.zfile = zipfile.ZipFile(zip)
+        except Exception:
+            print("File could not be located. Check the path.")
         print(zip+" loaded.")
 
     def do_zipSearch(self, args):
@@ -134,8 +131,16 @@ class MyPrompt(Cmd):
             except IndexError:
                 print("Need 3 args: to, n, k")
                 return
+        
+        if n < 1:
+            n=float("Inf")
+        if K < 1:
+            K = 1
+
         if not os.path.exists(to):
             os.makedirs(to)
+
+        
         extension = "cpp"
                 
         print("Searching...")
@@ -154,7 +159,7 @@ class MyPrompt(Cmd):
                 segment+=10
             
             item = infoList[index]
-
+            
             dirs = item.filename.split("/")
             if(len(dirs)<7):
                 continue
@@ -169,6 +174,7 @@ class MyPrompt(Cmd):
             else:
                 continue
             #print(ext)
+            #print(item)
             authName = dirs[2]
             if ext == extension and (len(authorsToExtract) < n or authName in authorsToExtract):
                 filesToExtract.append(item)
@@ -214,7 +220,7 @@ class MyPrompt(Cmd):
             args = 300
         n_est = int(args) 
         if not self.ps.featuresDetected:
-            self.do_featureDetect("")
+            self.ps.detectFeatures()
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import cross_val_score,ShuffleSplit
 
@@ -239,107 +245,11 @@ class MyPrompt(Cmd):
         print("CV Average:"+str(sum(scores)/5))
         #print(clf.estimators_)
 
-    def do_classifyFunctions(self, args):
-        """Cross validate over functions committed by authors
-         in all repos. This will give misleading results 
-         unless multiple projects are analyzed"""
-
-        """Builds and evaluates a Random Forest classifier for the chosen authors and features"""
-        if args == "":
-            args = 300
-        n_est = int(args) 
-        if not self.gitProfileSet.featuresDetected:
-            self.gitProfileSet.getFeatures()
-        from sklearn.ensemble import RandomForestClassifier
-        from sklearn.model_selection import cross_val_score,ShuffleSplit
-
-        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
-        features = self.gitProfileSet.counts
-        targets = self.gitProfileSet.target
-        print("Doing sanity check...")
-        self.sanityCheck(features, targets, clf)
-        print("Cross Validating...")
-        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
-        cv = ShuffleSplit(n_splits=5, test_size=0.3)
-        scores = cross_val_score(clf, features, targets, cv=cv)
-        clf.fit(features, targets)
-        print("OOB score: "+str(clf.oob_score_))
-        best = self.bestNFeatures(clf.feature_importances_, self.gitProfileSet.terms, 30)
-        
-        
-        print("Most important features:")
-        for item in best:
-            print(item)
-        print(scores)
-        print("CV Average:"+str(sum(scores)/5))
-        #print(clf.estimators_)
- 
-
-    def do_pruneGit(self, args):
-        """Limit to N authors with more than k functions. 0 for unlimited"""
-        args = args.split(" ")
-        if len(args) != 2:
-            print("Requires 2 args")
-            return
-
-        n= int(args[0])
-        k= int(args[1])
-        
-        print("Pruning Authors")
-        old = self.gitProfileSet.authors
-
-        new = dict()
-        count = 0
-        for item in old.items():
-            #print(item)
-            if len(item[1].functions) >= k:
-                new.update([item])
-                count+=1
-                if count == n and n != 0:
-                    break
-
-        self.gitProfileSet.authors = new
-
-
 
     def do_new(self, args):
         """Re-initializes profile set to be empty"""
         self.ps = ProfileSet.ProfileSet("")
-        self.gitProfileSet = gitProfileSet.gitProfileSet()
         self.featuresDetected=False
-
-    def do_fileConcat(self, args):
-        """Concatenates all files in the same directory to one file and replaces them in the directory."""
-        self.ps.fileConcat()
-    
-    def do_loadGit(self, args):
-        """Loads a single git repo"""
-        if args =="":
-            print("Must enter a path to a git repo.")
-        for filePath in args.split(" "):
-            self.gitProfileSet.addRepo(filePath)
-        self.do_displayGitAuthors("")
-
-    def do_displayGitAuthors(self, args):
-        """Displays all authors found in the currently loaded git repos"""
-        self.gitProfileSet.displayAuthors()
-
-
-
-    def do_loadGitRepos(self, args):
-        """Loads a directory args[0] of git repos, as many as args[1] def:inf"""
-        args = args.split(" ")
-        if len(args) == 0:
-            "Must enter a directory"
-        
-        if len(args)>1:
-            lim = int(args[1])
-        else:
-            lim = float("inf")
-        repos = self.ps.listdir_fullpath(args[0])
-        for i in range(0,min(len(repos), lim)):
-            if not os.path.basename(repos[i])[0]==".":
-                self.do_loadGit(repos[i])
 
     def do_compile(self, args):
         self.gitProfileSet.compileAuthors()  
@@ -399,45 +309,6 @@ class MyPrompt(Cmd):
             print("Hint: view Dan: 10 lines")
             return
     
-
-    def do_getGitRepos(self,args):
-        """Read repos from reporeapers .csv file, fetch and store in target directory, using temp if specified. Use temp if trying to download to external drive"""
-        if args == "":
-            print("Must supply a target filepath.")
-            return
-        args = args.split(" ")
-        
-        inputFile = args[0]
-        import csv
-        data = list(csv.reader(open(inputFile)))
-        outputDir = args[1]
-        if len(args)>2:
-            tempdir = args[2]
-        else:
-            tempdir = None
-        for row in data[1:]:
-            repo = row[0]
-            
-            import subprocess
-            import shutil 
-            repoDirName = repo.split("/")[1]
-            if tempdir != None:
-                downTarget = tempdir
-            else:
-                downTarget = outputDir
-            if os.path.exists(downTarget+"/"+repoDirName):
-                continue
-            if repoDirName not in os.listdir(outputDir):
-                #TODO: Make linux worthy
-                subprocess.Popen([r'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
-                    '-ExecutionPolicy',
-                    'Unrestricted',
-                    './downloadrepos.ps1',
-                    str(repo), downTarget], cwd=os.getcwd()).wait()  
-                if tempdir != None:
-                    shutil.copytree(tempdir+repoDirName, outputDir+"/"+repoDirName)
-                    shutil.rmtree(tempdir+repoDirName)
-
     def sanityCheck(self, features, targets, model):
 
         from sklearn import metrics,utils
