@@ -27,6 +27,29 @@ class featureExtractors:
 
 
     @staticmethod
+    def normalize(feat_cnt, denom = 0, flag = None):
+        """
+        :param feat_cnt: Numeric. Feature count to normalize
+        :param denom: Numeric. Denominator used when 'division' selected
+        :param flag: Str. Can be one of ('log', 'division', None)
+        :return:
+        """
+        if flag is None:
+            return feat_cnt
+        elif flag == 'log':
+            return np.log(feat_cnt)
+        elif flag == 'division':
+            try:
+                return feat_cnt / denom
+            except RuntimeWarning:
+                print('Invalid denominator for normalization - cannot be 0.'
+                      'Returning np.nan.')
+                return np.nan
+        else:
+            msg = "Invalid flag value. Must be one of ('log', 'division', None)"
+            raise ValueError(msg)
+
+    @staticmethod
     def characterLevel(function:str):
         """ returns row vector in scipy.sparse.csr_matrix row format of features extracted from function string"""
         nfeatures = len(featureExtractors.charfeatureNames)
@@ -87,10 +110,10 @@ class featureExtractors:
         features[8] /= fn_len
 
         for i in range(6):
-            try:
-                features[i] = np.log(features[i] / fn_len)
-            except RuntimeWarning: # cannot divide by 0
-                features[i] = np.NAN # use this or 0?
+            features[i] = featureExtractors.normalize(featureExtractors.normalize(features[i],
+                                                                                   fn_len,
+                                                                                   flag = 'division'),
+                                                      flag = 'log')
 
         features[6] = np.mean(line_lengths)
         features[7] = np.std(line_lengths)
@@ -100,12 +123,12 @@ class featureExtractors:
         if nbraces > 0:
             features[9] = [0, 1][new_line_brace / nbraces > 0.5]
         else:
-            features[9] = np.NAN # or use 0?
+            features[9] = -1
 
         if nindented > 0:
             features[10] = [0, 1][tab_indented / nindented > 0.5]
         else:
-            features[10] = np.NAN # or use 0?
+            features[10] = -1
 
         featureExtractors.functionLength = fn_len
         return csr_matrix(features, shape=(1, nfeatures))
@@ -171,23 +194,25 @@ class featureExtractors:
 
         ind = 0
         for kword in featureExtractors.keywords:
-            try:
-                features[ind] = np.log(kword_dict[kword] / \
-                                featureExtractors.functionLength)
-                # position of "count of unique keywords used" feature
-                # use this or the token kind?
+            """
+            features[ind] = featureExtractors.normalize(
+                featureExtractors.normalize(kword_dict[kword], featureExtractors.functionLength, flag='division'), 
+                flag='log')
+            """
+            features[ind] = featureExtractors.normalize(kword_dict[kword])
+            if kword_dict[kword] > 0:
                 features[n_kwords] += 1
-            except RuntimeWarning: # cannot divide by 0
-                features[ind] = np.NAN # use this or 0?
+
             ind += 1
 
         for i in range(3):
             ind = i + n_kwords
-            try:
-                features[ind] = np.log(features[ind] / \
-                                featureExtractors.functionLength)
-            except RuntimeWarning: # cannot divide by 0
-                features[ind] = np.NAN # use this or 0?
+            """
+            features[ind] = featureExtractors.normalize(
+                featureExtractors.normalize(features[ind], featureExtractors.functionLength, flag='division'), 
+                flag='log')
+            """
+            features[ind] = featureExtractors.normalize(features[ind])
 
         features[n_kwords + 3] = nesting_depth
         features[n_kwords + 4] = nesting_depth_brkt
@@ -199,7 +224,7 @@ class featureExtractors:
         """ Returns row vector scipy.sparse.csr_matrix of features extracted from ast"""
         return csr_matrix(0, shape = (1, 1))    #singleton 0 as default
 
-'''
+
 if __name__ == "__main__":
 
     tst = """#include <ctype.h>
@@ -298,12 +323,22 @@ if __name__ == "__main__":
     }
 
     return size;
-}"""
-    print(featureExtractors.charfeatureNames)
-    print(featureExtractors.characterLevel(tst))
+}
+   # print(featureExtractors.charfeatureNames)
+    #print(featureExtractors.characterLevel(tst))
 
     filename = os.getcwd() + "/test.cpp"
-    tokens = PPTools.Tokenize.cpp(filename)
-    print(featureExtractors.tokfeatureNames)
-    print(featureExtractors.tokenLevel(tokens))
-'''
+    #tokens = PPTools.Tokenize.cpp(filename)
+    #print(featureExtractors.tokfeatureNames)
+    #print(featureExtractors.tokenLevel(tokens))
+
+    tu = PPTools.Tokenize.cpp(filename)
+
+
+class AST:
+
+    def __init__(self, cursor):
+        self.cur = cursor # top-level node
+        # use dict to store counts of cursor types for now
+        # TODO: extend this to store counts for distinct sub-paths
+"""
