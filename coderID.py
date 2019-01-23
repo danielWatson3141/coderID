@@ -16,6 +16,7 @@ class MyPrompt(Cmd):
 
     def do_init(self, filePath):
         """Initialize profile set. non-existent file will create new  args: filePath"""
+        #os.environ["DYLD_LIBRARY_PATH"] = "/usr/local/Cellar/llvm/7.0.1/lib/"
         self.featuresDetected = False
         if filePath == '': 
             filePath = os.getcwd()+"/default.cid"
@@ -213,7 +214,7 @@ class MyPrompt(Cmd):
         if args == "":
             args = 300
         n_est = int(args) 
-        if not self.ps.featuresDetected:
+        if not self.ps.featureDetected:
             self.do_featureDetect("")
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import cross_val_score,ShuffleSplit
@@ -245,11 +246,20 @@ class MyPrompt(Cmd):
          unless multiple projects are analyzed"""
 
         """Builds and evaluates a Random Forest classifier for the chosen authors and features"""
-        if args == "":
-            args = 300
-        n_est = int(args) 
+        args = args.split(" ")
+        n_est = 300
+        numAuthors = -1
+
+        if len(args) == 1 and args[0] != '':
+            numAuthors = int(args[0])
+        if len(args) == 2:
+            n_est = int(args[1])
+
         if not self.gitProfileSet.featuresDetected:
-            self.gitProfileSet.getFeatures()
+            self.gitProfileSet.getFeatures(numAuthors = numAuthors)
+
+        # TODO: uncomment after feature creation testing is complete
+        """
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import cross_val_score,ShuffleSplit
 
@@ -257,7 +267,7 @@ class MyPrompt(Cmd):
         features = self.gitProfileSet.counts
         targets = self.gitProfileSet.target
         print("Doing sanity check...")
-        self.sanityCheck(features, targets, clf)
+        self.sanityCheck(features, targets, clf, numAuthors)
         print("Cross Validating...")
         clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
         cv = ShuffleSplit(n_splits=5, test_size=0.3)
@@ -273,7 +283,7 @@ class MyPrompt(Cmd):
         print(scores)
         print("CV Average:"+str(sum(scores)/5))
         #print(clf.estimators_)
- 
+        """
 
     def do_pruneGit(self, args):
         """Limit to N authors with more than k functions. 0 for unlimited"""
@@ -438,7 +448,7 @@ class MyPrompt(Cmd):
                     shutil.copytree(tempdir+repoDirName, outputDir+"/"+repoDirName)
                     shutil.rmtree(tempdir+repoDirName)
 
-    def sanityCheck(self, features, targets, model):
+    def sanityCheck(self, features, targets, model, numAuthors):
 
         from sklearn import metrics,utils
 
@@ -446,13 +456,15 @@ class MyPrompt(Cmd):
        
         features, targets = utils.shuffle(features, targets)
         expected = targets[n_samples //2:]
-        
+        # Test here
         model.fit(features[:n_samples//2], targets[:n_samples//2])
         predictions = model.predict(features[n_samples//2:])
 
         cm = metrics.confusion_matrix(expected, predictions) 
         sortedAuthors = sorted(self.gitProfileSet.authors.keys(), reverse=False)
-        authCount = len(sortedAuthors)
+        authCount = numAuthors
+        if numAuthors == -1:
+            authCount = len(sortedAuthors)
         #assert len(sortedAuthors) == cm.shape[0]
         for i in range(0, authCount):
             print(sortedAuthors[i]+": P="+str(cm[i,i]/sum(cm[i]))+" R="+str(cm[i,i]/sum(cm[:,i])))

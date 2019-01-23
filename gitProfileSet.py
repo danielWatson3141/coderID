@@ -1,15 +1,18 @@
-import pydriller
 import os
-import PPTools
-from sklearn.feature_extraction.text import TfidfVectorizer
-import multiprocessing
-from collections import Counter
-import numpy as np
+import re
 import time
 import queue
-import re
 
+import PPTools
+import pydriller
+import featureExtractors
+import multiprocessing
+import numpy as np
+from collections import Counter
 
+from scipy.sparse import hstack, vstack, csr_matrix
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_selection import mutual_info_classif, SelectKBest
 
 
 class gitProfileSet:
@@ -81,8 +84,8 @@ class gitProfileSet:
     def compileAuthors(self):
         import sys
         platform = sys.platform
-
-        if platform is "darwin" or platform is "linux":
+        # TODO: test multithreading on Linux via server
+        if platform is "linux": #or platform is "darwin":
             print("Doing work in parellel")
             self.compileInParellel()
         else:
@@ -94,7 +97,6 @@ class gitProfileSet:
             miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
             repository = pydriller.GitRepository(repo)
             print("Scanning repo: "+miner._path_to_repo)
-            
             
             tipeCounts = dict()
 
@@ -285,59 +287,89 @@ class gitProfileSet:
 
         return [1.0 * np.array([num_keyword, num_word_tokens]), fn_len]
 
-
-    def createLexicalFeaturesFunctions(self, text):
-        line_lengths = []
-        num_comments = 0
-        num_ternary = 0
-        num_macros = 0
-
-        for line in text.splitlines():
-            line_lengths.append(len(line))
-            # comments - need to account for str literals containing these vals
-            if '//' in line or line.startswith('/*'):
-                num_comments += 1
-
-            if line.startswith('#'): # macros
-                num_macros += 1
-
-            m = re.search("(.+=.+\?.+:.+;)", line)
-            if m is None: # no ternary operator
-                num_ternary += 1
-
-        return 1.0 * np.array([np.mean(line_lengths), np.std(line_lengths),
-                               num_ternary, num_comments, num_macros])
-
-    def getFeatures(self):
+    def getFeatures(self, numAuthors):
         inputs=[]
-        lexical_features = []
         self.target = []
+        charfeatureNames = featureExtractors.featureExtractors.charfeatureNames
+        charLevelFeatures = None
+        tokfeatureNames = featureExtractors.featureExtractors.tokfeatureNames
+        tokFeatures = None
+
         print("Tokenizing...") # generating tokens/unigrams
+        authors_seen = 0
+        #fns_seen = 0
         for author in self.authors.values():
+            if numAuthors != -1 and authors_seen == numAuthors:
+                    break
+            authors_seen += 1
+
             for fun in author.functions:
+                #fns_seen += 1
+                # TODO: Issue - not full functions, so these features (apart
+                # from unigram) are somewhat useless or cannot be calculated
+
                 tokens = PPTools.Tokenize.fun(fun)
                 inputs.append(tokens)
+
+                """
+                print(fun)
+                print(author.name)
+                """
+
+                # Function-string level features
+                fn_str = '\n'.join(fun.values())
+                if charLevelFeatures is None:
+                    charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
+                else:
+                    charLevelFeatures = vstack([charLevelFeatures,
+                                                featureExtractors.featureExtractors.characterLevel(fn_str)])
+
+                # Token-level features
+                if tokFeatures is None:
+                    tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
+                else:
+                    tokFeatures = vstack([tokFeatures,
+                                          featureExtractors.featureExtractors.tokenLevel(tokens)])
+
                 self.target.append(author.name)
 
-                lex_feat_tok = self.createLexicalFeaturesTokens(Counter(tokens))
-                lex_feat_fn = self.createLexicalFeaturesFunctions(fun)
-                fn_len = lex_feat_tok[1]
-
-                lex_feat_tok = np.log(lex_feat_tok[0] / fn_len)
-                lex_feat_fn[2:] = np.log(lex_feat_fn[2:] / fn_len)
-                lexical_features.append(lex_feat_tok + lex_feat_fn)
 
 
         print("Textifying...") # converting back to a document
         for i in range(0,len(inputs)):
             inputs[i] = PPTools.Tokenize.tokensToText(inputs[i]) #Convert to text
 
+        inputs = np.array(inputs)
         print("Vectorizing...")
-        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*", decode_error="ignore", lowercase=False)
+        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
+                                       decode_error="ignore", lowercase=False)
+        print(type(inputs))
         vectorizer.fit(inputs)
-        counts = vectorizer.transform(inputs)
-        self.counts = counts
-        self.terms = vectorizer.get_feature_names()
+        counts = vectorizer.transform(inputs) # unigrams
+
+        # full feature set
+
+        self.counts = hstack([counts, charLevelFeatures, tokFeatures])
+        self.terms = vectorizer.get_feature_names() + charfeatureNames + \
+                     tokfeatureNames
+        """
+        print(self.counts)
+        print(self.terms)
+        print(self.counts.shape)
+        print(fns_seen)
+        """
+
+        # First round feature selection using mutual information
+        print("Selecting features via mutual information....")
+        print("Number of features before selection: {}".format(self.counts.shape[1]))
+
+        feature_mi = mutual_info_classif(self.counts, self.target)
+        n_relevant_features = sum([1 for mi in feature_mi if mi > 0])
+
+        self.counts = SelectKBest(mutual_info_classif,
+                                  k = n_relevant_features).fit_transform(self.counts, self.target)
+        print("Number of features after selection: {}".format(n_relevant_features))
+
         self.featuresDetected = True
             #should fit feature detector here
             #then pass it down
@@ -350,6 +382,7 @@ class gitProfileSet:
             textLines[lnum] = line
 
         return "\n".join(textLines)
+
 class gitAuthor:
 
     def __init__(self, dev):
