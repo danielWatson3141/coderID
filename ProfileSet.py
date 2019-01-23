@@ -176,7 +176,7 @@ class Author:
                         with open(fname, 'r') as readfile:
                             outfile.write(readfile.read() + "\n\n")
         except Exception:
-            print(Exception.__traceback__)
+            print(Exception)
             print("Something went wrong, No changes made.")
             return
         for doc in self.docs:

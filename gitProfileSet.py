@@ -21,7 +21,6 @@ class gitProfileSet:
     #TODO: Make sibling class of ProfileSet
     
     langList =["cpp", "c"]
-
     def __init__(self):
         """Initialize a new gitset"""
         self.repos = []
@@ -56,7 +55,7 @@ class gitProfileSet:
             infoQ.put(info)
     
     @staticmethod
-    def mineRepo(repo:str, queue:multiprocessing.Queue)->dict:
+    def mineRepo(repo, queue):
         """Mine repos for relevant commits. Populates queue."""
         miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
         print("Scanning repo: "+miner._path_to_repo)
@@ -135,16 +134,18 @@ class gitProfileSet:
                         #maintain list of dicts containing the source code of specific functions. Same format as for lines
                         lineIndex = 0
                         for fun in funs:
-                            
+                            newFun = dict()
                             try:
                                 while(leDiff["added"][lineIndex][0]<fun.start_line):
                                     lineIndex+=1
                             
                                 while(leDiff["added"][lineIndex][0]<fun.end_line):
-                                    author.functions.append({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):leDiff["added"][lineIndex][1]})
+                                    newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):leDiff["added"][lineIndex][1]})
                                     lineIndex+=1
                             except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
                                 pass
+                            if len(newFun) > 0:
+                                author.functions.append(newFun)
 
                     
                     
@@ -325,11 +326,11 @@ class gitProfileSet:
                                                 featureExtractors.featureExtractors.characterLevel(fn_str)])
 
                 # Token-level features
-                if tokFeatures is None:
-                    tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
-                else:
-                    tokFeatures = vstack([tokFeatures,
-                                          featureExtractors.featureExtractors.tokenLevel(tokens)])
+                #if tokFeatures is None:
+                #    tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
+                #else:
+                #    tokFeatures = vstack([tokFeatures,
+                #                          featureExtractors.featureExtractors.tokenLevel(tokens)])
 
                 self.target.append(author.name)
 
@@ -349,7 +350,7 @@ class gitProfileSet:
 
         # full feature set
 
-        self.counts = hstack([counts, charLevelFeatures, tokFeatures])
+        self.counts = hstack([counts, charLevelFeatures])
         self.terms = vectorizer.get_feature_names() + charfeatureNames + \
                      tokfeatureNames
         """
@@ -465,16 +466,18 @@ class gitInfo:
             #maintain list of dicts containing the source code of specific functions. Same format as for lines
             lineIndex = 0
             for fun in funs:
-                
+                newFun = dict()
                 try:
                     while(leDiff["added"][lineIndex][0]<fun.start_line):
                         lineIndex+=1
                 
                     while(leDiff["added"][lineIndex][0]<fun.end_line):
-                        self.funs.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):leDiff["added"][lineIndex][1]})
+                        newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):leDiff["added"][lineIndex][1]})
                         lineIndex+=1
                 except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
                     pass
+                if len(newFun) > 0:
+                    self.funs.update(newFun)
     #TODO: clean unnecessary getters
     def getrepo(self):  
         return self.repo
