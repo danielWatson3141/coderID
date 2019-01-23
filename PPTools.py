@@ -18,20 +18,10 @@ class Tokenize:
     #TODO: Make linux-worthy
     # changed to work for Mac; not tested for linux
 
-    if not cindex.Config.loaded:
-        cindex.Config.set_library_file(
-            '/usr/local/Cellar/llvm/7.0.1/lib/libclang.dylib')
-        """
-        import sys
-        platform = sys.platform
-        if platform is "darwin" or platform is "linux":
-            
-            cindex.Config.set_library_path('/usr/local/Cellar/llvm/7.0.1/lib')
-            cindex.Config.set_library_file(
-                '/usr/local/Cellar/llvm/7.0.1/lib/libclang.dylib')
-        else:
-            cindex.Config.set_library_file('C:/Program Files/LLVM/bin/libclang.dll')
-       """
+    #if not cindex.Config.loaded:
+    #   cindex.Config.set_library_file(
+    #        '/usr/local/Cellar/llvm/7.0.1/lib/libclang.dylib')
+       
 
 
     @staticmethod
@@ -75,7 +65,8 @@ class Tokenize:
             if filename is None:
                 filename = lineInfo[1]
             changes = changes+line+"\n"
-
+        if filename is None:
+            pass
         tu = idx.parse(filename,unsaved_files=[(filename,changes)],args=['-std=c++11'],options=0)
         return tu.get_tokens(extent=tu.cursor.extent)    
         
