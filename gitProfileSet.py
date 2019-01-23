@@ -1,13 +1,18 @@
-import pydriller
 import os
-import PPTools
-from sklearn.feature_extraction.text import TfidfVectorizer
-import multiprocessing
-from collections import Counter
+import re
 import time
 import queue
 
+import PPTools
+import pydriller
+import featureExtractors
+import multiprocessing
+import numpy as np
+from collections import Counter
 
+from scipy.sparse import hstack, vstack, csr_matrix
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_selection import mutual_info_classif, SelectKBest
 
 
 class gitProfileSet:
@@ -58,7 +63,6 @@ class gitProfileSet:
         commitList = miner.traverse_commits()
         
         tipeCounts = dict()
-
         for commit in commitList:
             tipe = commitType.categorize(commit)
 
@@ -80,8 +84,8 @@ class gitProfileSet:
     def compileAuthors(self):
         import sys
         platform = sys.platform
-
-        if platform is "darwin" or platform is "linux":
+        # TODO: test multithreading on Linux via server
+        if platform is "linux": #or platform is "darwin":
             print("Doing work in parellel")
             self.compileInParellel()
         else:
@@ -93,7 +97,6 @@ class gitProfileSet:
             miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
             repository = pydriller.GitRepository(repo)
             print("Scanning repo: "+miner._path_to_repo)
-            
             
             tipeCounts = dict()
 
@@ -267,25 +270,106 @@ class gitProfileSet:
         for value in self.authors.values():
             print(value)
 
-    def getFeatures(self):
+    def createLexicalFeaturesTokens(self, token_counts):
+        # change this to directly modify feature matrix
+        fn_len = 0 # function length, not including whitespace
+        num_keyword = 0
+        num_word_tokens = 0
+        # TODO: need to expand this outside of C++
+        # include break, continue, etc.?
+        KEYWORDS = set('do', 'if', 'else', 'switch', 'for', 'while')
+        for k, v in token_counts.items():
+            fn_len += len(k) * v
+            if k in KEYWORDS:
+                num_keyword += v
+            if k.isalnum() and not k.isdigit(): # only words
+                num_word_tokens += v
+
+        return [1.0 * np.array([num_keyword, num_word_tokens]), fn_len]
+
+    def getFeatures(self, numAuthors):
         inputs=[]
         self.target = []
-        print("Tokenizing...")
-        for author in self.authors.values():    #for each author
-            for fun in author.functions:        #Take each function
-                inputs.append(PPTools.Tokenize.fun(fun))    #append it to inputs
-                self.target.append(author.name)             #Author name is target
+        charfeatureNames = featureExtractors.featureExtractors.charfeatureNames
+        charLevelFeatures = None
+        tokfeatureNames = featureExtractors.featureExtractors.tokfeatureNames
+        tokFeatures = None
 
-        print("Textifying...")
+        print("Tokenizing...") # generating tokens/unigrams
+        authors_seen = 0
+        #fns_seen = 0
+        for author in self.authors.values():
+            if numAuthors != -1 and authors_seen == numAuthors:
+                    break
+            authors_seen += 1
+
+            for fun in author.functions:
+                #fns_seen += 1
+                # TODO: Issue - not full functions, so these features (apart
+                # from unigram) are somewhat useless or cannot be calculated
+
+                tokens = PPTools.Tokenize.fun(fun)
+                inputs.append(tokens)
+
+                """
+                print(fun)
+                print(author.name)
+                """
+
+                # Function-string level features
+                fn_str = '\n'.join(fun.values())
+                if charLevelFeatures is None:
+                    charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
+                else:
+                    charLevelFeatures = vstack([charLevelFeatures,
+                                                featureExtractors.featureExtractors.characterLevel(fn_str)])
+
+                # Token-level features
+                if tokFeatures is None:
+                    tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
+                else:
+                    tokFeatures = vstack([tokFeatures,
+                                          featureExtractors.featureExtractors.tokenLevel(tokens)])
+
+                self.target.append(author.name)
+
+
+
+        print("Textifying...") # converting back to a document
         for i in range(0,len(inputs)):
             inputs[i] = PPTools.Tokenize.tokensToText(inputs[i]) #Convert to text
 
+        inputs = np.array(inputs)
         print("Vectorizing...")
-        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*", decode_error="ignore", lowercase=False)
+        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
+                                       decode_error="ignore", lowercase=False)
+        print(type(inputs))
         vectorizer.fit(inputs)
-        counts = vectorizer.transform(inputs)
-        self.counts = counts
-        self.terms = vectorizer.get_feature_names()
+        counts = vectorizer.transform(inputs) # unigrams
+
+        # full feature set
+
+        self.counts = hstack([counts, charLevelFeatures, tokFeatures])
+        self.terms = vectorizer.get_feature_names() + charfeatureNames + \
+                     tokfeatureNames
+        """
+        print(self.counts)
+        print(self.terms)
+        print(self.counts.shape)
+        print(fns_seen)
+        """
+
+        # First round feature selection using mutual information
+        print("Selecting features via mutual information....")
+        print("Number of features before selection: {}".format(self.counts.shape[1]))
+
+        feature_mi = mutual_info_classif(self.counts, self.target)
+        n_relevant_features = sum([1 for mi in feature_mi if mi > 0])
+
+        self.counts = SelectKBest(mutual_info_classif,
+                                  k = n_relevant_features).fit_transform(self.counts, self.target)
+        print("Number of features after selection: {}".format(n_relevant_features))
+
         self.featuresDetected = True
             #should fit feature detector here
             #then pass it down
@@ -298,6 +382,7 @@ class gitProfileSet:
             textLines[lnum] = line
 
         return "\n".join(textLines)
+
 class gitAuthor:
 
     def __init__(self, dev):
