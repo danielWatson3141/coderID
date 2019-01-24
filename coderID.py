@@ -85,8 +85,6 @@ class MyPrompt(Cmd):
         if not self.gitProfileSet.featuresDetected:
             self.gitProfileSet.getFeatures(numAuthors = numAuthors)
 
-        # TODO: uncomment after feature creation testing is complete
-        """
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import cross_val_score,ShuffleSplit
 
@@ -110,7 +108,7 @@ class MyPrompt(Cmd):
         print(scores)
         print("CV Average:"+str(sum(scores)/5))
         #print(clf.estimators_)
-        """
+
 
     def do_pruneGit(self, args):
         """Limit to N authors with more than k functions. 0 for unlimited"""
@@ -284,15 +282,16 @@ class MyPrompt(Cmd):
         model.fit(features[:n_samples//2], targets[:n_samples//2])
         predictions = model.predict(features[n_samples//2:])
 
-        cm = metrics.confusion_matrix(expected, predictions) 
+        cm = metrics.confusion_matrix(expected, predictions)
         sortedAuthors = sorted(self.gitProfileSet.authors.keys(), reverse=False)
         authCount = numAuthors
         if numAuthors == -1:
             authCount = len(sortedAuthors)
         #assert len(sortedAuthors) == cm.shape[0]
+        """
         for i in range(0, authCount):
             print(sortedAuthors[i]+": P="+str(cm[i,i]/sum(cm[i]))+" R="+str(cm[i,i]/sum(cm[:,i])))
-
+        """
         from sklearn.metrics import classification_report
         print(classification_report(expected, predictions))
 
