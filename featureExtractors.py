@@ -1,5 +1,6 @@
 from scipy.sparse import csr_matrix
 import re
+import copy
 import numpy as np
 import collections
 import os.path
@@ -25,6 +26,24 @@ class featureExtractors:
 
     astfeatureNames = []
 
+
+    @staticmethod
+    def normalize(feat_cnt, denom = 0, flag = None):
+        """
+        :param feat_cnt: Numeric. Feature count to normalize
+        :param denom: Numeric. Denominator used when 'division' selected
+        :param flag: Str. Can be one of ('log', 'division', None)
+        :return:
+        """
+        if flag is None:
+            return feat_cnt
+        elif flag == 'log':
+            return np.log(feat_cnt + 1)
+        elif flag == 'division':
+            return feat_cnt / denom
+        else:
+            msg = "Invalid flag value. Must be one of ('log', 'division', None)"
+            raise ValueError(msg)
 
     @staticmethod
     def characterLevel(function:str):
@@ -87,10 +106,10 @@ class featureExtractors:
         features[8] /= fn_len
 
         for i in range(6):
-            try:
-                features[i] = np.log(features[i] / fn_len)
-            except RuntimeWarning: # cannot divide by 0
-                features[i] = np.NAN # use this or 0?
+            features[i] = featureExtractors.normalize(featureExtractors.normalize(features[i],
+                                                                                   fn_len,
+                                                                                   flag = 'division'),
+                                                      flag = 'log')
 
         features[6] = np.mean(line_lengths)
         features[7] = np.std(line_lengths)
@@ -100,12 +119,12 @@ class featureExtractors:
         if nbraces > 0:
             features[9] = [0, 1][new_line_brace / nbraces > 0.5]
         else:
-            features[9] = np.NAN # or use 0?
+            features[9] = -1
 
         if nindented > 0:
             features[10] = [0, 1][tab_indented / nindented > 0.5]
         else:
-            features[10] = np.NAN # or use 0?
+            features[10] = -1
 
         featureExtractors.functionLength = fn_len
         return csr_matrix(features, shape=(1, nfeatures))
@@ -118,7 +137,6 @@ class featureExtractors:
         kword_dict = {k:0 for k in featureExtractors.keywords}
 
         par_stack = collections.deque()
-        seen_control = False
         depth_so_far = 0
         nesting_depth = 0
 
@@ -133,61 +151,69 @@ class featureExtractors:
         for token in tokens:
             # number of tokens
             features[n_kwords + 1] += 1
-            # number of literals
+
             kind = str(token.kind)
-            features[n_kwords + 2] += [0, 1][kind == 'TokenKind.LITERAL']
+            # number of literals
+            features[n_kwords + 2] += [0, 1][kind == 'TokenKind.KEYWORD']
+            # number of keywords
+            features[n_kwords] += [0, 1][kind == 'TokenKind.LITERAL']
+
             tok = token.spelling
 
             #print("{}".format(token))
             if tok in featureExtractors.keywords:
                 kword_dict[tok] += 1
-                if seen_control == False:
-                    seen_control = True
 
             # ctrl nesting depth calculations
             if tok == "{":
-                if seen_control:
-                    par_stack.append(1)
-                    if len(par_stack) == 0: # highest level of the ctrl stmt
-                        depth_so_far += 1
-            if tok == "}":
-                if seen_control:
-                    depth_so_far += par_stack.pop()
-                if len(par_stack) <= 1: # nested stmt complete
-                    nesting_depth = max(nesting_depth, depth_so_far)
+                if len(par_stack) == 0:
                     depth_so_far = 0
-                    seen_control = False
+                par_stack.append(tok)
+
+            if tok == "}":
+                depth_so_far += 1
+                if par_stack:
+                    par_stack.pop()
+                    if len(par_stack) == 0:
+                        nesting_depth = max(nesting_depth, depth_so_far)
 
             # bracket nesting depth calculations
-            if tok in brackets.values():      # opening brackets
-                bracket_stack.append(token)
-            if tok in brackets.keys():        # closing brackets
-                # add valid bracket ordering check?
-                if bracket_stack.pop() == brackets[tok]:
-                    depth_so_far_brkt += 1
-                if len(bracket_stack) == 0: # end of nesting
-                    nesting_depth_brkt = max(nesting_depth_brkt, depth_so_far_brkt)
+            if tok in brackets.values():    # opening brackets
+                if len(bracket_stack) == 0:
                     depth_so_far_brkt = 0
+                    bracket_stack.append(tok)
+
+            if tok in brackets.keys():      # closing brackets
+                depth_so_far_brkt += 1
+                if bracket_stack:
+                    bracket_stack.pop()
+                    if len(bracket_stack) == 0:
+                        nesting_depth_brkt = max(nesting_depth_brkt, depth_so_far_brkt)
+
+
+        nesting_depth = max(nesting_depth, depth_so_far + len(par_stack))
+        nesting_depth_brkt = max(nesting_depth_brkt,
+                                 depth_so_far_brkt + len(bracket_stack))
 
         ind = 0
         for kword in featureExtractors.keywords:
-            try:
-                features[ind] = np.log(kword_dict[kword] / \
-                                featureExtractors.functionLength)
-                # position of "count of unique keywords used" feature
-                # use this or the token kind?
-                features[n_kwords] += 1
-            except RuntimeWarning: # cannot divide by 0
-                features[ind] = np.NAN # use this or 0?
+            """
+            features[ind] = featureExtractors.normalize(
+                featureExtractors.normalize(kword_dict[kword], featureExtractors.functionLength, flag='division'), 
+                flag='log')
+            """
+            features[ind] = featureExtractors.normalize(kword_dict[kword])
             ind += 1
 
         for i in range(3):
             ind = i + n_kwords
-            try:
-                features[ind] = np.log(features[ind] / \
-                                featureExtractors.functionLength)
-            except RuntimeWarning: # cannot divide by 0
-                features[ind] = np.NAN # use this or 0?
+            """
+            features[ind] = featureExtractors.normalize(
+                featureExtractors.normalize(features[ind], featureExtractors.functionLength, flag='division'), 
+                flag='log')
+            """
+            features[ind] = featureExtractors.normalize(features[ind])
+
 
         features[n_kwords + 3] = nesting_depth
         features[n_kwords + 4] = nesting_depth_brkt
@@ -199,10 +225,10 @@ class featureExtractors:
         """ Returns row vector scipy.sparse.csr_matrix of features extracted from ast"""
         return csr_matrix(0, shape = (1, 1))    #singleton 0 as default
 
-'''
+"""
 if __name__ == "__main__":
 
-    tst = """#include <ctype.h>
+    tst = #include <ctype.h>
     #include <errno.h>
     
     static ssize_t get_cpu_usages(thermal_module_t *module, cpu_usage_t *list) {
@@ -298,12 +324,30 @@ if __name__ == "__main__":
     }
 
     return size;
-}"""
+}
     print(featureExtractors.charfeatureNames)
     print(featureExtractors.characterLevel(tst))
 
     filename = os.getcwd() + "/test.cpp"
-    tokens = PPTools.Tokenize.cpp(filename)
-    print(featureExtractors.tokfeatureNames)
-    print(featureExtractors.tokenLevel(tokens))
-'''
+    #tokens = PPTools.Tokenize.cpp(filename)
+    #print(featureExtractors.tokfeatureNames)
+    #print(featureExtractors.tokenLevel(tokens))
+
+    tu = PPTools.Tokenize.cpp(filename)
+"""
+
+"""
+class AST:
+
+    def __init__(self, cursor):
+        self.cur = cursor # top-level node
+        self.depth = 0
+
+        # use dict to store counts of cursor types for now
+        # TODO: extend this to store counts for distinct sub-paths
+
+        # Construct an element of the corpus of the node types by traversing the tree and the
+        #   storing the type of each node in a vector
+
+        #
+"""
