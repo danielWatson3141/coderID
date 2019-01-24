@@ -73,38 +73,101 @@ class MyPrompt(Cmd):
          unless multiple projects are analyzed"""
 
         """Builds and evaluates a Random Forest classifier for the chosen authors and features"""
+        
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.model_selection import cross_val_score,ShuffleSplit
+        from sklearn import metrics, utils
+        from sklearn.metrics import classification_report
+
+        import csv
+        
         args = args.split(" ")
         n_est = 300
         numAuthors = -1
+        expName = "exp"
 
-        if len(args) == 1 and args[0] != '':
+        if len(args) >= 1 and args[0] != '':
             numAuthors = int(args[0])
-        if len(args) == 2:
+        if len(args) >= 2:
             n_est = int(args[1])
+        if len(args) >= 3:
+            expName = args[2]
+
 
         if not self.gitProfileSet.featuresDetected:
+            print("Running Feature Detection")
             self.gitProfileSet.getFeatures(numAuthors = numAuthors)
 
-        from sklearn.ensemble import RandomForestClassifier
-        from sklearn.model_selection import cross_val_score,ShuffleSplit
-
+        print("Generating CM")
+        n_samples = len(self.gitProfileSet.target)
         clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
-        features = self.gitProfileSet.counts
-        targets = self.gitProfileSet.target
-        print("Doing sanity check...")
-        self.sanityCheck(features, targets, clf, numAuthors)
+        
+        #shuffle the dataset
+        features, targets = utils.shuffle(self.gitProfileSet.counts, self.gitProfileSet.target)
+        
+        #fit the model to the last 2/3 of the samples
+        clf.fit(features[:(n_samples//3)*2], targets[:(n_samples//3)*2])
+        
+        #predict the other 1/3 of the data
+        predictions = clf.predict(features[n_samples//3:])
+        expected = targets[n_samples//3:]
+        
+        #Compute OOB score
+        print("OOB score: "+str(clf.oob_score_))
+        
+        
+        #Compute best 50 features
+        best = self.bestNFeatures(clf.feature_importances_, self.gitProfileSet.terms, 50)
+
+        import csv
+
+        #write best features
+        with open(expName+"_best_features.csv", 'w') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            
+            for item in best:
+                writer.writerow(item)        
+
+
+        #compute confusion matrix
+        cm = metrics.confusion_matrix(expected, predictions)
+        print(cm)
+
+        #write confusion matrix
+        with open(expName+"CM.csv", 'w') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            for row in cm:
+                writer.writerow(row)
+
+
+        #make classification report
+        classReport = classification_report(expected, predictions, output_dict=True)
+
+        print(classification_report(expected, predictions))
+        #write classification report
+
+        with open(expName+"_report.csv", 'w') as reportFile:
+            w = csv.writer(reportFile)
+
+            oneSample = list(classReport.items())[0]
+            header = ["Author"]
+            header.extend(oneSample[1].keys())
+            w.writerow(header)
+
+            for item in classReport.items():
+                row = [item[0]]
+                row.extend(item[1].values())
+                w.writerow(row)
+
+
+        #compute CV scores
         print("Cross Validating...")
         clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
+
         cv = ShuffleSplit(n_splits=5, test_size=0.3)
         scores = cross_val_score(clf, features, targets, cv=cv)
-        clf.fit(features, targets)
-        print("OOB score: "+str(clf.oob_score_))
-        best = self.bestNFeatures(clf.feature_importances_, self.gitProfileSet.terms, 30)
-        
-        
-        print("Most important features:")
-        for item in best:
-            print(item)
         print(scores)
         print("CV Average:"+str(sum(scores)/5))
         #print(clf.estimators_)
