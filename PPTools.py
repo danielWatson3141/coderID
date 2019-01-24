@@ -18,9 +18,9 @@ class Tokenize:
     #TODO: Make linux-worthy
     # changed to work for Mac; not tested for linux
 
-    #if not cindex.Config.loaded:
-    #   cindex.Config.set_library_file(
-    #        '/usr/local/Cellar/llvm/7.0.1/lib/libclang.dylib')
+    if not cindex.Config.loaded:
+       cindex.Config.set_library_file(
+            '/usr/local/Cellar/llvm/7.0.1/lib/libclang.dylib')
        
 
 

@@ -1,5 +1,6 @@
 from scipy.sparse import csr_matrix
 import re
+import copy
 import numpy as np
 import collections
 import os.path
@@ -37,14 +38,9 @@ class featureExtractors:
         if flag is None:
             return feat_cnt
         elif flag == 'log':
-            return np.log(feat_cnt)
+            return np.log(feat_cnt + 1)
         elif flag == 'division':
-            try:
-                return feat_cnt / denom
-            except RuntimeWarning:
-                print('Invalid denominator for normalization - cannot be 0.'
-                      'Returning np.nan.')
-                return np.nan
+            return feat_cnt / denom
         else:
             msg = "Invalid flag value. Must be one of ('log', 'division', None)"
             raise ValueError(msg)
@@ -141,7 +137,6 @@ class featureExtractors:
         kword_dict = {k:0 for k in featureExtractors.keywords}
 
         par_stack = collections.deque()
-        seen_control = False
         depth_so_far = 0
         nesting_depth = 0
 
@@ -156,41 +151,49 @@ class featureExtractors:
         for token in tokens:
             # number of tokens
             features[n_kwords + 1] += 1
-            # number of literals
+
             kind = str(token.kind)
-            features[n_kwords + 2] += [0, 1][kind == 'TokenKind.LITERAL']
+            # number of literals
+            features[n_kwords + 2] += [0, 1][kind == 'TokenKind.KEYWORD']
+            # number of keywords
+            features[n_kwords] += [0, 1][kind == 'TokenKind.LITERAL']
+
             tok = token.spelling
 
             #print("{}".format(token))
             if tok in featureExtractors.keywords:
                 kword_dict[tok] += 1
-                if seen_control == False:
-                    seen_control = True
 
             # ctrl nesting depth calculations
             if tok == "{":
-                if seen_control:
-                    par_stack.append(1)
-                    if len(par_stack) == 0: # highest level of the ctrl stmt
-                        depth_so_far += 1
-            if tok == "}":
-                if seen_control:
-                    depth_so_far += par_stack.pop()
-                if len(par_stack) <= 1: # nested stmt complete
-                    nesting_depth = max(nesting_depth, depth_so_far)
+                if len(par_stack) == 0:
                     depth_so_far = 0
-                    seen_control = False
+                par_stack.append(tok)
+
+            if tok == "}":
+                depth_so_far += 1
+                if par_stack:
+                    par_stack.pop()
+                    if len(par_stack) == 0:
+                        nesting_depth = max(nesting_depth, depth_so_far)
 
             # bracket nesting depth calculations
-            if tok in brackets.values():      # opening brackets
-                bracket_stack.append(token)
-            if tok in brackets.keys():        # closing brackets
-                # add valid bracket ordering check?
-                if bracket_stack.pop() == brackets[tok]:
-                    depth_so_far_brkt += 1
-                if len(bracket_stack) == 0: # end of nesting
-                    nesting_depth_brkt = max(nesting_depth_brkt, depth_so_far_brkt)
+            if tok in brackets.values():    # opening brackets
+                if len(bracket_stack) == 0:
                     depth_so_far_brkt = 0
+                    bracket_stack.append(tok)
+
+            if tok in brackets.keys():      # closing brackets
+                depth_so_far_brkt += 1
+                if bracket_stack:
+                    bracket_stack.pop()
+                    if len(bracket_stack) == 0:
+                        nesting_depth_brkt = max(nesting_depth_brkt, depth_so_far_brkt)
+
+
+        nesting_depth = max(nesting_depth, depth_so_far + len(par_stack))
+        nesting_depth_brkt = max(nesting_depth_brkt,
+                                 depth_so_far_brkt + len(bracket_stack))
 
         ind = 0
         for kword in featureExtractors.keywords:
@@ -200,9 +203,6 @@ class featureExtractors:
                 flag='log')
             """
             features[ind] = featureExtractors.normalize(kword_dict[kword])
-            if kword_dict[kword] > 0:
-                features[n_kwords] += 1
-
             ind += 1
 
         for i in range(3):
@@ -214,6 +214,7 @@ class featureExtractors:
             """
             features[ind] = featureExtractors.normalize(features[ind])
 
+
         features[n_kwords + 3] = nesting_depth
         features[n_kwords + 4] = nesting_depth_brkt
 
@@ -224,10 +225,10 @@ class featureExtractors:
         """ Returns row vector scipy.sparse.csr_matrix of features extracted from ast"""
         return csr_matrix(0, shape = (1, 1))    #singleton 0 as default
 
-
+"""
 if __name__ == "__main__":
 
-    tst = """#include <ctype.h>
+    tst = #include <ctype.h>
     #include <errno.h>
     
     static ssize_t get_cpu_usages(thermal_module_t *module, cpu_usage_t *list) {
@@ -324,8 +325,8 @@ if __name__ == "__main__":
 
     return size;
 }
-   # print(featureExtractors.charfeatureNames)
-    #print(featureExtractors.characterLevel(tst))
+    print(featureExtractors.charfeatureNames)
+    print(featureExtractors.characterLevel(tst))
 
     filename = os.getcwd() + "/test.cpp"
     #tokens = PPTools.Tokenize.cpp(filename)
@@ -333,12 +334,20 @@ if __name__ == "__main__":
     #print(featureExtractors.tokenLevel(tokens))
 
     tu = PPTools.Tokenize.cpp(filename)
+"""
 
-
+"""
 class AST:
 
     def __init__(self, cursor):
         self.cur = cursor # top-level node
+        self.depth = 0
+
         # use dict to store counts of cursor types for now
         # TODO: extend this to store counts for distinct sub-paths
+
+        # Construct an element of the corpus of the node types by traversing the tree and the
+        #   storing the type of each node in a vector
+
+        #
 """

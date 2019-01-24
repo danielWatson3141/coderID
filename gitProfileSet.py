@@ -9,6 +9,7 @@ import featureExtractors
 import multiprocessing
 import numpy as np
 from collections import Counter
+import itertools
 
 from scipy.sparse import hstack, vstack, csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -200,8 +201,8 @@ class gitProfileSet:
                 producerQ.put(newP)
             
 
-        
-        
+
+
         print("Consumers Started")      
         prodDone = False
         conDone = False
@@ -271,22 +272,6 @@ class gitProfileSet:
         for value in self.authors.values():
             print(value)
 
-    def createLexicalFeaturesTokens(self, token_counts):
-        # change this to directly modify feature matrix
-        fn_len = 0 # function length, not including whitespace
-        num_keyword = 0
-        num_word_tokens = 0
-        # TODO: need to expand this outside of C++
-        # include break, continue, etc.?
-        KEYWORDS = set('do', 'if', 'else', 'switch', 'for', 'while')
-        for k, v in token_counts.items():
-            fn_len += len(k) * v
-            if k in KEYWORDS:
-                num_keyword += v
-            if k.isalnum() and not k.isdigit(): # only words
-                num_word_tokens += v
-
-        return [1.0 * np.array([num_keyword, num_word_tokens]), fn_len]
 
     def getFeatures(self, numAuthors):
         inputs=[]
@@ -310,12 +295,7 @@ class gitProfileSet:
                 # from unigram) are somewhat useless or cannot be calculated
 
                 tokens = PPTools.Tokenize.fun(fun)
-                inputs.append(tokens)
-
-                """
-                print(fun)
-                print(author.name)
-                """
+                inputs.append(list(tokens))
 
                 # Function-string level features
                 fn_str = '\n'.join(fun.values())
@@ -326,50 +306,49 @@ class gitProfileSet:
                                                 featureExtractors.featureExtractors.characterLevel(fn_str)])
 
                 # Token-level features
-                #if tokFeatures is None:
-                #    tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
-                #else:
-                #    tokFeatures = vstack([tokFeatures,
-                #                          featureExtractors.featureExtractors.tokenLevel(tokens)])
-
                 self.target.append(author.name)
-
-
 
         print("Textifying...") # converting back to a document
         for i in range(0,len(inputs)):
+            if tokFeatures is None:
+                tokFeatures = featureExtractors.featureExtractors.tokenLevel(inputs[i])
+            else:
+                tokFeatures = vstack([tokFeatures,
+                                      featureExtractors.featureExtractors.tokenLevel(inputs[i])])
+
+
             inputs[i] = PPTools.Tokenize.tokensToText(inputs[i]) #Convert to text
 
         inputs = np.array(inputs)
         print("Vectorizing...")
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
                                        decode_error="ignore", lowercase=False)
-        print(type(inputs))
+
         vectorizer.fit(inputs)
-        counts = vectorizer.transform(inputs) # unigrams
+        self.counts = vectorizer.transform(inputs) # unigrams
 
         # full feature set
-
-        self.counts = hstack([counts, charLevelFeatures])
+        self.counts = hstack([self.counts, charLevelFeatures, tokFeatures], format='csr')
         self.terms = vectorizer.get_feature_names() + charfeatureNames + \
                      tokfeatureNames
-        """
-        print(self.counts)
-        print(self.terms)
-        print(self.counts.shape)
-        print(fns_seen)
-        """
+        self.target = np.array(self.target)
 
         # First round feature selection using mutual information
         print("Selecting features via mutual information....")
-        print("Number of features before selection: {}".format(self.counts.shape[1]))
+        total_num_features = self.counts.shape[1]
+        print("Number of features before selection: {}".format(total_num_features))
 
         feature_mi = mutual_info_classif(self.counts, self.target)
-        n_relevant_features = sum([1 for mi in feature_mi if mi > 0])
+        relevant_features = [mi for mi in feature_mi if mi > 0]
+        min_mi = min(relevant_features)
+        n_relevant_features = sum([1 for mi in feature_mi if mi > min_mi])
 
         self.counts = SelectKBest(mutual_info_classif,
                                   k = n_relevant_features).fit_transform(self.counts, self.target)
+
         print("Number of features after selection: {}".format(n_relevant_features))
+        frac_selected = 100 * n_relevant_features / total_num_features
+        print("Percentage of features selected: {:.2f}%".format(frac_selected))
 
         self.featuresDetected = True
             #should fit feature detector here
