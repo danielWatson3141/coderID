@@ -257,11 +257,10 @@ class MyPrompt(Cmd):
             print("Problem during compilation. Saving...")
             self.do_save()
 
-            
-        #self.gitProfileSet.extractForAuthors()
-        #self.do_save("")
-        #self.do_load("")  #to fix the threadSpawning bug
-
+    def do_setInfo(self, args):
+        gps = self.gitProfileSet
+        
+       
     def do_view(self, args):
         """View author[0]'s: n[1] most recent (commits, repos, files, functions, lines)[3]"""
         #TODO add quality directions
@@ -392,7 +391,7 @@ class MyPrompt(Cmd):
 def memory_limit():
     import resource
     soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-    resource.setrlimit(resource.RLIMIT_AS, (get_memory() * 1024 / 1.1, hard))
+    resource.setrlimit(resource.RLIMIT_AS, (get_memory() * 1024 , hard))
 
 def get_memory():
     with open('/proc/meminfo', 'r') as mem:

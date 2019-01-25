@@ -326,7 +326,10 @@ class gitProfileSet:
                 if fn_str.isspace() or fn_str == '':
                     continue
                 
-                tokens = PPTools.Tokenize.fun(fun)
+                try:
+                    tokens = PPTools.Tokenize.fun(fun) #Sometimes this  breaks for n.a.r.
+                except Exception:
+                    continue 
                 inputs.append(list(tokens))
 
                 # Function-string level features
@@ -372,7 +375,7 @@ class gitProfileSet:
         feature_mi = mutual_info_classif(self.counts, self.target)
         relevant_features = [mi for mi in feature_mi if mi > 0]
         min_mi = min(relevant_features)
-        n_relevant_features = sum([1 for mi in feature_mi if mi > min_mi])
+        n_relevant_features = sum([1 for mi in feature_mi if mi > .001])
 
         self.counts = SelectKBest(mutual_info_classif,
                                   k = n_relevant_features).fit_transform(self.counts, self.target)
@@ -393,6 +396,16 @@ class gitProfileSet:
             textLines[lnum] = line
 
         return "\n".join(textLines)
+
+    #TODO: Fix.
+    # def __str__(self, lines):
+    #      print(str(len(gps.authors))+" authors.")
+
+    #     commits = 0
+    #     functions = 0
+    #     for author in
+    #     print(str(sum(map(lambda x: len(x.functions), gps.authors)))+" functions in total.")
+        
 
 class gitAuthor:
 
@@ -540,8 +553,6 @@ class commitType(Enum):
         
         if added > 20:
             return commitType.FEATURE
-
-        
 
         return commitType.OTHER
 
