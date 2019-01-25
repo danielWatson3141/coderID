@@ -27,6 +27,7 @@ class gitProfileSet:
         self.repos = []
         self.authors = dict()
         self.featuresDetected = False
+        self.minedRepos = set()
 
     def addRepo(self, args):
         print("Adding repo: "+args)
@@ -80,20 +81,32 @@ class gitProfileSet:
         print("types: "+str(tipeCounts))
     
           
-    
-    def compileAuthors(self):
+    #TODO: take args from cli
+    def compileAuthors(self, minAuth = 25, minDocs = 9):
         import sys
         platform = sys.platform
-        # TODO: test multithreading on Linux via server
-        if platform is "linux": #or platform is "darwin":
+        # This is disabled for now. Probably permanently
+        if platform is None: #or platform is "darwin":
             print("Doing work in parellel")
             self.compileInParellel()
         else:
             print("Doing work in sequence")
-            self.compileInSequence()
+            self.compileInSequence(minAuth, minDocs)
 
-    def compileInSequence(self):
+    def compileInSequence(self, minAuthors, minDocs):
+        
+        authorsWithEnoughDocs = 0
+        for author in self.authors:
+            if len(author.functions) > minDocs:
+                authorsWithEnoughDocs += 1
+
         for repo in self.repos:
+            if authorsWithEnoughDocs >= minAuthors:
+                return
+            if repo in self.minedRepos:
+                continue
+            else:
+                self.minedRepos.add(repo)
             miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
             repository = pydriller.GitRepository(repo)
             print("Scanning repo: "+miner._path_to_repo)
@@ -116,6 +129,11 @@ class gitProfileSet:
                         print("Found new author: "+author.name)
                     
                     author = self.authors.get(author.name)
+
+                    author.commits.add(repo + commit.hash)
+
+                    if repo not in author.repos:
+                        author.repos.add(repo)
                     
                     for mod in commit.modifications:
                         mod._calculate_metrics()
@@ -145,13 +163,17 @@ class gitProfileSet:
                                     lineIndex+=1
                             except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
                                 pass
-                            if len(newFun) > 0:
+                            if len(newFun) > 1:
                                 author.functions.append(newFun)
+                                if len(author.functions) == minDocs:
+                                    authorsWithEnoughDocs += 1
+                                    
 
                     
                     
             print(str("finished"+str(miner._path_to_repo)))
             print("types: "+str(tipeCounts))
+            print(authorsWithEnoughDocs+" authors with enough code so far.")
 
 
 
@@ -294,11 +316,16 @@ class gitProfileSet:
                 # TODO: Issue - not full functions, so these features (apart
                 # from unigram) are somewhat useless or cannot be calculated
 
+                fn_str = '\n'.join(fun.values())
+
+                #whitespace fn's still getting in. This will catch for that.
+                if fn_str.isspace() or fn_str == '':
+                    continue
+                
                 tokens = PPTools.Tokenize.fun(fun)
                 inputs.append(list(tokens))
 
                 # Function-string level features
-                fn_str = '\n'.join(fun.values())
                 if charLevelFeatures is None:
                     charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
                 else:
@@ -369,7 +396,7 @@ class gitAuthor:
         if dev is not None:
             self.name = dev.name
             self.email = dev.email
-        self.commits = dict() #key: commitHash value: commit
+        self.commits = set() #store with repo+commitHash
         self.files = set()
         self.functions = list() #list of dicts. Each dict represents a function. str same as self.lines 
         self.lines = dict() #key: {commitHash,file.cpp,lineNumber} value: literal code
@@ -408,7 +435,7 @@ class gitAuthor:
         self.lines.update(other.lines)
         
     def __str__(self):
-        return self.name+": "+str(len(self.commits.items()))+" commits. "+str(len(self.lines))+" LOC, "+str(len(self.functions))+" complete functions."
+        return self.name+": "+str(len(self.commits))+" commits. "+str(len(self.lines))+" LOC, "+str(len(self.functions))+" complete functions from "+str(len(self.repos))+ " repos."
 
 class gitInfo:
     """Container class for extracted git info"""

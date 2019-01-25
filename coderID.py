@@ -1,5 +1,9 @@
-from cmd import Cmd
 
+import warnings
+warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+
+from cmd import Cmd
+import sys
 import pickle
 import os
 import zipfile
@@ -237,7 +241,11 @@ class MyPrompt(Cmd):
                 self.do_loadGit(repos[i])
 
     def do_compile(self, args):
-        self.gitProfileSet.compileAuthors()  
+        args = args.split(" ")
+        if len(args) > 1:
+            self.gitProfileSet.compileAuthors(args[0], args[1])  
+        else:    
+            self.gitProfileSet.compileAuthors()  
         print("Compilation Complete")
         
         #self.gitProfileSet.extractForAuthors()
@@ -371,8 +379,28 @@ class MyPrompt(Cmd):
         return sortedMatch[0:n]
 
     
+def memory_limit():
+    import resource
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    resource.setrlimit(resource.RLIMIT_AS, (get_memory() * 1024 / 1.1, hard))
+
+def get_memory():
+    with open('/proc/meminfo', 'r') as mem:
+        free_memory = 0
+        for i in mem:
+            sline = i.split()
+            if str(sline[0]) in ('MemFree:', 'Buffers:', 'Cached:'):
+                free_memory += int(sline[1])
+    return free_memory
+
 if __name__ == '__main__':
-    prompt = MyPrompt()
-    prompt.prompt = 'coderID> '
-    prompt.do_init("")
-    prompt.cmdloop('Starting prompt...')
+    
+    memory_limit() # Limitates maximun memory usage to 90%
+    try:
+        prompt = MyPrompt()
+        prompt.prompt = 'coderID> '
+        prompt.do_init("")
+        prompt.cmdloop('Starting prompt...')
+    except MemoryError:
+        sys.stderr.write('\n\nERROR: Memory Exception\n')
+        sys.exit(1)
