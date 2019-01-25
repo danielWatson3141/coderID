@@ -1,6 +1,9 @@
 
+import sys
 import warnings
-warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
 
 from cmd import Cmd
 import sys
