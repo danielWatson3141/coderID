@@ -177,7 +177,7 @@ class gitProfileSet:
                     
             print(str("finished"+str(miner._path_to_repo)))
             print("types: "+str(tipeCounts))
-            print(authorsWithEnoughDocs+" authors with enough code so far.")
+            #print(authorsWithEnoughDocs+" authors with enough code so far.")
 
 
 
