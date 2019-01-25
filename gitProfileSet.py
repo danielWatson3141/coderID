@@ -355,8 +355,8 @@ class gitProfileSet:
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
                                        decode_error="ignore", lowercase=False)
 
-        vectorizer.fit(inputs)
-        self.counts = vectorizer.transform(inputs) # unigrams
+        #vectorizer.fit(inputs)
+        self.counts = vectorizer.fit_transform(inputs) # unigrams
 
         # full feature set
         self.counts = hstack([self.counts, charLevelFeatures, tokFeatures], format='csr')
@@ -544,3 +544,7 @@ class commitType(Enum):
         
 
         return commitType.OTHER
+
+
+
+        

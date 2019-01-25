@@ -168,15 +168,16 @@ class MyPrompt(Cmd):
                 row.extend(item[1].values())
                 w.writerow(row)
 
+        #skip cross-validation for now
 
         #compute CV scores
-        print("Cross Validating...")
-        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
+        #print("Cross Validating...")
+        #clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
 
-        cv = ShuffleSplit(n_splits=5, test_size=0.3)
-        scores = cross_val_score(clf, features, targets, cv=cv)
-        print(scores)
-        print("CV Average:"+str(sum(scores)/5))
+        #cv = ShuffleSplit(n_splits=5, test_size=0.3)
+        #scores = cross_val_score(clf, features, targets, cv=cv)
+        #print(scores)
+        #print("CV Average:"+str(sum(scores)/5))
         #print(clf.estimators_)
 
 
@@ -225,6 +226,7 @@ class MyPrompt(Cmd):
     def do_displayGitAuthors(self, args):
         """Displays all authors found in the currently loaded git repos"""
         self.gitProfileSet.displayAuthors()
+        #print(self.gitProfileSet)
 
 
 
