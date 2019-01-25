@@ -7,6 +7,10 @@ import PPTools
 import pydriller
 import featureExtractors
 import multiprocessing
+import sys
+import warnings
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
 import numpy as np
 from collections import Counter
 import itertools
