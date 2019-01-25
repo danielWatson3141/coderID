@@ -247,12 +247,17 @@ class MyPrompt(Cmd):
 
     def do_compile(self, args):
         args = args.split(" ")
-        if len(args) > 1:
-            self.gitProfileSet.compileAuthors(int(args[0]), int(args[1]) )
-        else:    
-            self.gitProfileSet.compileAuthors()  
-        print("Compilation Complete")
-        
+        try:
+            if len(args) > 1:
+                self.gitProfileSet.compileAuthors(int(args[0]), int(args[1]) )
+            else:    
+                self.gitProfileSet.compileAuthors()  
+            print("Compilation Complete")
+        except Exception:
+            print("Problem during compilation. Saving...")
+            self.do_save()
+
+            
         #self.gitProfileSet.extractForAuthors()
         #self.do_save("")
         #self.do_load("")  #to fix the threadSpawning bug
