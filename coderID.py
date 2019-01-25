@@ -248,7 +248,7 @@ class MyPrompt(Cmd):
     def do_compile(self, args):
         args = args.split(" ")
         if len(args) > 1:
-            self.gitProfileSet.compileAuthors(args[0], args[1])  
+            self.gitProfileSet.compileAuthors(int(args[0]), int(args[1])  
         else:    
             self.gitProfileSet.compileAuthors()  
         print("Compilation Complete")
