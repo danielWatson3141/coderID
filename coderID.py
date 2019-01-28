@@ -255,7 +255,8 @@ class MyPrompt(Cmd):
             print("Compilation Complete")
         except Exception:
             print("Problem during compilation. Saving...")
-            self.do_save()
+        
+        self.do_save()
 
     def do_setInfo(self, args):
         gps = self.gitProfileSet
