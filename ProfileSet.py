@@ -3,6 +3,8 @@ import pickle
 #import FeatureSet
 import PPTools
 import featureExtractors
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
 import numpy as np
 
 from scipy.sparse import hstack, vstack, csr_matrix
