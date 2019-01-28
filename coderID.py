@@ -398,7 +398,7 @@ class MyPrompt(Cmd):
 def memory_limit():
     import resource
     soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-    resource.setrlimit(resource.RLIMIT_AS, (get_memory() * 1024 / 1.1, hard))
+    resource.setrlimit(resource.RLIMIT_AS, (get_memory() * 1024 / 1.1 , hard))
 
 def get_memory():
     with open('/proc/meminfo', 'r') as mem:
