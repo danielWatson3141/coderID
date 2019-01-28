@@ -46,7 +46,7 @@ class MyPrompt(Cmd):
         file = open(self.homeFilePath, 'wb')
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
         import copy
-        pickler.dump((self.ps, copy.deepcopy(self.gitProfileSet))) #save after Compile may be broken by this
+        pickler.dump(self.ps)
         print("Saved to "+self.homeFilePath)
 
     def do_load(self, args):
@@ -55,7 +55,7 @@ class MyPrompt(Cmd):
             self.do_load(self.homeFilePath)
         if(os.path.isfile(args)):
             file = open(args, 'rb')
-            self.ps, self.gitProfileSet = pickle.Unpickler(file).load() #load
+            self.ps= pickle.Unpickler(file).load() #load
 
         #self.do_displayGitAuthors("")
     def do_quit(self, args):
@@ -206,8 +206,8 @@ class MyPrompt(Cmd):
             print("Supply 2 integer arguments")
             return
         args = args.split(" ")
-        n = int(args[0])
-        k = int(args[1])
+        n = int(args[1])
+        k = int(args[0])
         if not ProfileSet.Author.is_number(k):
             print("Must supply an integer argument")
             return
@@ -216,46 +216,98 @@ class MyPrompt(Cmd):
 
     def do_classifyGCJ(self, args):
         """Builds and evaluates a Random Forest classifier for the chosen authors and features"""
-        if args == "":
-            args = 300
-        n_est = int(args) 
+        args = args.split(" ")
+        n_est = 300
+        numAuthors = -1
+        expName = "exp"
+
+        if len(args) >= 1 and args[0] != '':
+            numAuthors = int(args[0])
+        if len(args) >= 2:
+            n_est = int(args[1])
+        if len(args) >= 3:
+            expName = args[2]
+
         if not self.ps.featuresDetected:
-            self.ps.detectFeatures()
+            self.ps.detectFeatures(numAuthors)
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import cross_val_score,ShuffleSplit
+        from sklearn import metrics, utils
+        from sklearn.metrics import classification_report
 
+        print("Generating CM")
+        n_samples = len(self.ps.target)
         clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
-        features = self.ps.counts
-        targets = self.ps.target
-        print("Doing sanity check...")
-        self.sanityCheck(features, targets, clf)
-        print("Cross Validating...")
-        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
-        cv = ShuffleSplit(n_splits=5, test_size=0.3)
-        scores = cross_val_score(clf, features, targets, cv=cv)
-        clf.fit(features, targets)
+        
+        #shuffle the dataset
+        features, targets = utils.shuffle(self.ps.counts, self.ps.target)
+        
+        #fit the model to the last 2/3 of the samples
+        clf.fit(features[:(n_samples//3)*2], targets[:(n_samples//3)*2])
+        
+        #predict the other 1/3 of the data
+        predictions = clf.predict(features[n_samples//3:])
+        expected = targets[n_samples//3:]
+        
+        #Compute OOB score
         print("OOB score: "+str(clf.oob_score_))
-        best = self.bestNFeatures(clf.feature_importances_, self.ps.terms, 30)
         
         
-        print("Most important features:")
-        for item in best:
-            print(item)
-        print(scores)
-        print("CV Average:"+str(sum(scores)/5))
-        #print(clf.estimators_)
+        #Compute best 50 features
+        best = self.bestNFeatures(clf.feature_importances_, self.ps.terms, 50)
 
+        import csv
+
+        #write best features
+        with open(expName+"_best_features.csv", 'w') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            
+            for item in best:
+                writer.writerow(item)        
+
+
+        #compute confusion matrix
+        cm = metrics.confusion_matrix(expected, predictions)
+        print(cm)
+
+        #write confusion matrix
+        with open(expName+"CM.csv", 'w') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            for row in cm:
+                writer.writerow(row)
+
+
+        #make classification report
+        classReport = classification_report(expected, predictions, output_dict=True)
+
+        print(classification_report(expected, predictions))
+        #write classification report
+
+        with open(expName+"_report.csv", 'w') as reportFile:
+            w = csv.writer(reportFile)
+
+            oneSample = list(classReport.items())[0]
+            header = ["Author"]
+            header.extend(oneSample[1].keys())
+            w.writerow(header)
+
+            for item in classReport.items():
+                row = [item[0]]
+                row.extend(item[1].values())
+                w.writerow(row)
 
     def do_new(self, args):
         """Re-initializes profile set to be empty"""
         self.ps = ProfileSet.ProfileSet("")
         self.featuresDetected=False
 
-    def do_compile(self, args):
-        self.gitProfileSet.compileAuthors()  
+    #def do_compile(self, args):
+    #    self.ps.compileAuthors()  
         print("Compilation Complete")
         
-        #self.gitProfileSet.extractForAuthors()
+        #self.ProfileSet.extractForAuthors()
         #self.do_save("")
         #self.do_load("")  #to fix the threadSpawning bug
 
@@ -265,7 +317,7 @@ class MyPrompt(Cmd):
         try:
             args = args.split(":")
             
-            author = self.gitProfileSet.authors.get(args[0])
+            author = self.ps.authors.get(args[0])
             
 
             args = args[1].strip().split(" ")
@@ -322,7 +374,7 @@ class MyPrompt(Cmd):
         predictions = model.predict(features[n_samples//2:])
 
         cm = metrics.confusion_matrix(expected, predictions) 
-        sortedAuthors = sorted(self.gitProfileSet.authors.keys(), reverse=False)
+        sortedAuthors = sorted(self.ps.authors.keys(), reverse=False)
         authCount = len(sortedAuthors)
         #assert len(sortedAuthors) == cm.shape[0]
         for i in range(0, authCount):
@@ -343,8 +395,23 @@ class MyPrompt(Cmd):
         sortedMatch = sorted(match.items(), key=operator.itemgetter(1), reverse=True)
         return sortedMatch[0:n]
 
-    
+def memory_limit():
+    import resource
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    resource.setrlimit(resource.RLIMIT_AS, (get_memory() * 1024 / 1.1, hard))
+
+def get_memory():
+    with open('/proc/meminfo', 'r') as mem:
+        free_memory = 0
+        for i in mem:
+            sline = i.split()
+            if str(sline[0]) in ('MemFree:', 'Buffers:', 'Cached:'):
+                free_memory += int(sline[1])
+    return free_memory
+
 if __name__ == '__main__':
+    memory_limit() # Limitates maximun memory usage to 90%
+
     prompt = MyPrompt()
     prompt.prompt = 'coderID> '
     prompt.do_init("")

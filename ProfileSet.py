@@ -2,7 +2,12 @@ import os.path
 import pickle
 #import FeatureSet
 import PPTools
+import featureExtractors
+import numpy as np
+
+from scipy.sparse import hstack, vstack, csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_selection import mutual_info_classif, SelectKBest
 from os import walk
 from numpy import ndarray
 
@@ -70,7 +75,7 @@ class ProfileSet:
 
         
     def addAuthor(self, dir):
-        print("Trying to build author: "+dir)
+        #print("Trying to build author: "+dir)
         nAuth = Author(dir,self.cfg, self.language)
         if len(nAuth.docs)==0:
             #print("No docs of type "+self.language+" found in "+dir)
@@ -91,38 +96,110 @@ class ProfileSet:
             author.fileConcat()
             self.docs.extend(author.docs)
 
-    def detectFeatures(self):
+    def detectFeatures(self, numAuthors):
         
         inputs=[]
-        for doc in self.docs:
-            inputs.append(PPTools.Tokenize.tokenize(doc))
-
-        for i in range(0,len(inputs)):
-            inputs[i] = PPTools.Tokenize.tokensToText(inputs[i])
-
-        print("Vectorizing...")
-        
-        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*", decode_error="ignore", lowercase=False)
-        vectorizer.fit(inputs)
-        counts = vectorizer.transform(inputs)
-        self.counts = counts
-        self.terms = vectorizer.get_feature_names()
-
         self.target = []
-        
-        targetNum = 1
-        for author in self.authors.values() :
-            for _ in range(len(author.docs)):
-                self.target.append(author.authName)
-            targetNum+=1
+        charfeatureNames = featureExtractors.featureExtractors.charfeatureNames
+        charLevelFeatures = None
+        tokfeatureNames = featureExtractors.featureExtractors.tokfeatureNames
+        tokFeatures = None
+
+        print("Tokenizing...") # generating tokens/unigrams
+        authors_seen = 0
+        #fns_seen = 0
+        for author in self.authors.values():
+            if numAuthors != -1 and authors_seen == numAuthors:
+                    break
+            authors_seen += 1
+
+            for doc in author.docs:
+                #fns_seen += 1
+                # TODO: Issue - not full functions, so these features (apart
+                # from unigram) are somewhat useless or cannot be calculated
+
+                with open(doc, 'r') as myfile:
+                    fn_str = myfile.read()
+
+                #whitespace fn's still getting in. This will catch for that.
+                if fn_str.isspace() or fn_str == '':
+                    continue
+                
+                try:
+                    tokens = PPTools.Tokenize.text(doc, fn_str) #Sometimes this  breaks for n.a.r.
+                except Exception:
+                    print("failed parsing "+doc)
+                    continue 
+                inputs.append(list(tokens))
+
+                # Function-string level features
+                if charLevelFeatures is None:
+                    charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
+                else:
+                    charLevelFeatures = vstack([charLevelFeatures,
+                                                featureExtractors.featureExtractors.characterLevel(fn_str)])
+
+                # Token-level features
+                self.target.append(author.name)
+
+        print("Textifying...") # converting back to a document
+        for i in range(0,len(inputs)):
+            if tokFeatures is None:
+                tokFeatures = featureExtractors.featureExtractors.tokenLevel(inputs[i])
+            else:
+                tokFeatures = vstack([tokFeatures,
+                                      featureExtractors.featureExtractors.tokenLevel(inputs[i])])
+
+
+            inputs[i] = PPTools.Tokenize.tokensToText(inputs[i]) #Convert to text
+
+        inputs = np.array(inputs)
+        print("Vectorizing...")
+        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
+                                       decode_error="ignore", lowercase=False)
+
+        #vectorizer.fit(inputs)
+        self.counts = vectorizer.fit_transform(inputs) # unigrams
+
+        # full feature set
+        self.counts = hstack([self.counts, charLevelFeatures, tokFeatures], format='csr')
+        self.terms = vectorizer.get_feature_names() + charfeatureNames + \
+                     tokfeatureNames
+        self.target = np.array(self.target)
+
+        # First round feature selection using mutual information
+        print("Selecting features via mutual information....")
+        total_num_features = self.counts.shape[1]
+        print("Number of features before selection: {}".format(total_num_features))
+
+        feature_mi = mutual_info_classif(self.counts, self.target)
+        relevant_features = [mi for mi in feature_mi if mi > 0]
+        min_mi = min(relevant_features)
+        n_relevant_features = sum([1 for mi in feature_mi if mi > .001])
+
+        self.counts = SelectKBest(mutual_info_classif,
+                                  k = n_relevant_features).fit_transform(self.counts, self.target)
+
+        print("Number of features after selection: {}".format(n_relevant_features))
+        frac_selected = 100 * n_relevant_features / total_num_features
+        print("Percentage of features selected: {:.2f}%".format(frac_selected))
+
+        self.featuresDetected = True
             #should fit feature detector here
             #then pass it down
-        
-        self.featuresDetected = True
+
+    def functionToString(self, lines):
+        textLines = list(len(lines))
+
+        for lineInfo, line in lines:
+            cHash, fil, lnum = lineInfo
+            textLines[lnum] = line
+
+        return "\n".join(textLines)
 
 class Author:
     def __init__(self, dir, cfg=None, lang="cpp"):
-        self.authName = os.path.basename(dir)
+        self.name = os.path.basename(dir)
         self.docs = []
         self.cfg=cfg
         self.language = lang
@@ -148,7 +225,7 @@ class Author:
         self.docs.extend(other.docs)
         
     def __str__(self):
-        toRet = self.authName+":\n"
+        toRet = self.name+":\n"
         for doc in self.docs:
             toRet += "\t"+str(doc)+"\n"
         return toRet

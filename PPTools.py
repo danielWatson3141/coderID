@@ -1,5 +1,5 @@
 import os.path
-import javalang
+#import javalang
 from clang import cindex
 
 class PreProcessor:
@@ -54,17 +54,23 @@ class Tokenize:
 
     @staticmethod
     def fun(lines):
-        idx = cindex.Index.create()
-        
         filename = None
         changes = ""
         for lineInfo, line in lines.items():
             if filename is None:
                 filename = lineInfo[1]
             changes = changes+line+"\n"
+        
+        return Tokenize.text(filename, changes)
+        
+    @staticmethod
+    def text(filename, fn_str):
+        idx = cindex.Index.create()
+        
+        tu = idx.parse(filename,unsaved_files=[(filename,fn_str)],args=['-std=c++11'],options=0)
+        return tu.get_tokens(extent=tu.cursor.extent)   
 
-        tu = idx.parse(filename,unsaved_files=[(filename,changes)],args=['-std=c++11'],options=0)
-        return tu.get_tokens(extent=tu.cursor.extent)    
+
         
     @staticmethod
     def tokensToText(tokens):
