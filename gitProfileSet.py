@@ -327,10 +327,11 @@ class gitProfileSet:
                     continue
                 
                 try:
-                    tokens = PPTools.Tokenize.fun(fun) #Sometimes this  breaks for n.a.r.
+                    tokens = list(PPTools.Tokenize.fun(fun)) #Sometimes this  breaks for n.a.r.
                 except Exception:
                     continue 
-                inputs.append(list(tokens))
+                #inputs.append(list(tokens))
+
 
                 # Function-string level features
                 if charLevelFeatures is None:
@@ -339,20 +340,18 @@ class gitProfileSet:
                     charLevelFeatures = vstack([charLevelFeatures,
                                                 featureExtractors.featureExtractors.characterLevel(fn_str)])
 
-                # Token-level features
+                # Token-level 
+                if tokFeatures is None:
+                    tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
+                else:
+                    tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
+
+                inputs.append(PPTools.Tokenize.tokensToText(tokens)) #Convert to text
+
                 self.target.append(author.name)
 
-        print("Textifying...") # converting back to a document
-        for i in range(0,len(inputs)):
-            if tokFeatures is None:
-                tokFeatures = featureExtractors.featureExtractors.tokenLevel(inputs[i])
-            else:
-                tokFeatures = vstack([tokFeatures,
-                                      featureExtractors.featureExtractors.tokenLevel(inputs[i])])
-
-
-            inputs[i] = PPTools.Tokenize.tokensToText(inputs[i]) #Convert to text
-
+            
+            
         inputs = np.array(inputs)
         print("Vectorizing...")
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
