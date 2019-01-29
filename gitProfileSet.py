@@ -14,7 +14,7 @@ if not sys.warnoptions:
 import numpy as np
 from collections import Counter
 import itertools
-
+from tqdm import tqdm
 from scipy.sparse import hstack, vstack, csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_selection import mutual_info_classif, SelectKBest
@@ -117,7 +117,7 @@ class gitProfileSet:
             
             tipeCounts = dict()
 
-            for commit in miner.traverse_commits():
+            for commit in tqdm(miner.traverse_commits()):
                 tipe = commitType.categorize(commit)
 
                 if tipe not in tipeCounts:
@@ -130,7 +130,7 @@ class gitProfileSet:
                     author = commit.author
                     if author.name not in self.authors:
                         self.authors.update({author.name:gitAuthor(author)})
-                        print("Found new author: "+author.name)
+                        #print("Found new author: "+author.name)
                     
                     author = self.authors.get(author.name)
 
@@ -307,10 +307,10 @@ class gitProfileSet:
         tokfeatureNames = featureExtractors.featureExtractors.tokfeatureNames
         tokFeatures = None
 
-        print("Tokenizing...") # generating tokens/unigrams
+        print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
         #fns_seen = 0
-        for author in self.authors.values():
+        for author in tqdm(self.authors.values()):
             if numAuthors != -1 and authors_seen == numAuthors:
                     break
             authors_seen += 1
@@ -367,17 +367,19 @@ class gitProfileSet:
         self.target = np.array(self.target)
 
         # First round feature selection using mutual information
-        print("Selecting features via mutual information....")
         total_num_features = self.counts.shape[1]
         print("Number of features before selection: {}".format(total_num_features))
 
         feature_mi = mutual_info_classif(self.counts, self.target)
-        relevant_features = [mi for mi in feature_mi if mi > 0]
-        min_mi = min(relevant_features)
-        n_relevant_features = sum([1 for mi in feature_mi if mi > .001])
+        print("Selecting features via mutual information....")
 
-        self.counts = SelectKBest(mutual_info_classif,
-                                  k = n_relevant_features).fit_transform(self.counts, self.target)
+        relevantIndeces = np.where(np.array(feature_mi) > .01)[0]
+        self.counts = self.counts[:,relevantIndeces]
+        #min_mi = min(relevant_features)
+        n_relevant_features = len(relevantIndeces)
+
+        #self.counts = SelectKBest(mutual_info_classif,
+        #                         k = n_relevant_features).fit_transform(self.counts, self.target)
 
         print("Number of features after selection: {}".format(n_relevant_features))
         frac_selected = 100 * n_relevant_features / total_num_features

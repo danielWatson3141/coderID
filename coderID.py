@@ -14,6 +14,8 @@ import string
 import gitProfileSet
 import ProfileSet
 
+from tqdm import tqdm
+
 class MyPrompt(Cmd):
 
     #TODO: make more OO.
@@ -107,7 +109,7 @@ class MyPrompt(Cmd):
 
         print("Generating CM")
         n_samples = len(self.gitProfileSet.target)
-        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
+        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
         
         #shuffle the dataset
         features, targets = utils.shuffle(self.gitProfileSet.counts, self.gitProfileSet.target)
@@ -196,7 +198,7 @@ class MyPrompt(Cmd):
 
         new = dict()
         count = 0
-        for item in old.items():
+        for item in tqdm(old.items()):
             #print(item)
             if len(item[1].functions) >= k:
                 new.update([item])
