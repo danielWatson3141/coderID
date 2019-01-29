@@ -184,14 +184,15 @@ class MyPrompt(Cmd):
 
 
     def do_pruneGit(self, args):
-        """Limit to N authors with more than k functions. 0 for unlimited"""
+        """Limit to N authors with between k and m functions. 0 for unlimited"""
         args = args.split(" ")
-        if len(args) != 2:
-            print("Requires 2 args")
+        if len(args) != 3:
+            print("Requires 3 args")
             return
 
         n= int(args[0])
         k= int(args[1])
+        m= int(args[2])
         
         print("Pruning Authors")
         old = self.gitProfileSet.authors
@@ -200,7 +201,7 @@ class MyPrompt(Cmd):
         count = 0
         for item in tqdm(old.items()):
             #print(item)
-            if len(item[1].functions) >= k:
+            if len(item[1].functions) >= k and len(item[1].functions) <= m:
                 new.update([item])
                 count+=1
                 if count == n and n != 0:
