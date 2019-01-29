@@ -1,6 +1,22 @@
 import os.path
 from clang import cindex
 
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        pass
+
+    try:
+        import unicodedata
+        unicodedata.numeric(s)
+        return True
+    except (TypeError, ValueError):
+        pass
+
+    return False    
+
 class PreProcessor:
 
     def toDocStr(self, file, filters):
@@ -72,8 +88,19 @@ class Tokenize:
         
     @staticmethod
     def tokensToText(tokens):
-        tokenStrings = map(lambda x: x.spelling, tokens)
+        tokenStrings = map(lambda x: Tokenize.trainingRepresentative(x), tokens)
         return " ".join(tokenStrings)
+
+    @staticmethod
+    def trainingRepresentative(token):
+        txt = token.spelling
+        if txt[0] == "\"" and txt[-1] == "\"":
+            return "cidSL"
+        elif is_number(txt):
+            return "cidNL"
+        else:
+            return txt
+
 
     import javalang
     @staticmethod
