@@ -410,7 +410,7 @@ def get_memory():
     return free_memory
 
 if __name__ == '__main__':
-    memory_limit() # Limitates maximun memory usage to 90%
+    #memory_limit() # Limitates maximun memory usage to 90%
 
     prompt = MyPrompt()
     prompt.prompt = 'coderID> '
