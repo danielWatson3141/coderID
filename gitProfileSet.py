@@ -375,6 +375,8 @@ class gitProfileSet:
 
         relevantIndeces = np.where(np.array(feature_mi) > .01)[0]
         self.counts = self.counts[:,relevantIndeces]
+        self.terms = [self.terms[i] for i in relevantIndeces]
+       
         #min_mi = min(relevant_features)
         n_relevant_features = len(relevantIndeces)
 
