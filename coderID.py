@@ -244,12 +244,14 @@ class MyPrompt(Cmd):
         #shuffle the dataset
         features, targets = utils.shuffle(self.ps.counts, self.ps.target)
         
-        #fit the model to the last 2/3 of the samples
-        clf.fit(features[:(n_samples//3)*2], targets[:(n_samples//3)*2])
+        #fit the model to the first 2/3 of the samples
+        clf.fit(features[0:(n_samples//3)*2], targets[0:(n_samples//3)*2])
         
-        #predict the other 1/3 of the data
-        predictions = clf.predict(features[n_samples//3:])
-        expected = targets[n_samples//3:]
+        #predict the last 1/3 of the data
+        predictions = clf.predict(features[(n_samples//3)*2 +1:])
+
+
+        expected = targets[n_samples//3*2 +1:]
         
         #Compute OOB score
         print("OOB score: "+str(clf.oob_score_))
