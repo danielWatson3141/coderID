@@ -6,6 +6,10 @@ import zipfile
 import string
 import ProfileSet
 
+import cProfile
+
+from tqdm import tqdm
+
 class MyPrompt(Cmd):
 
     #TODO: make more OO.
@@ -74,9 +78,10 @@ class MyPrompt(Cmd):
             print("Failed. target should be superdirectory of one ../gcj/.. directory")
 
         self.ps = ProfileSet.ProfileSet()
-        
-        for numberedFolder in os.listdir(currentDir):
+        print("Gathering files....")
+        for numberedFolder in tqdm(os.listdir(currentDir)):
             self.ps.addAuthorsDir(currentDir+"/"+numberedFolder)
+        self.do_displayAuthors("")
 
     
 
@@ -149,14 +154,9 @@ class MyPrompt(Cmd):
         authorsToExtract = []
         filesToExtract = []
         #itemCount = len(infoList)
-        segment = 0
-
-        for index in range(0,len(infoList)):
+        
+        for index in tqdm(range(0,len(infoList))):
             
-            progress = int((index/len(infoList))*100)
-            if  progress > segment-1:
-                print(progress)
-                segment+=10
             
             item = infoList[index]
             
@@ -183,15 +183,15 @@ class MyPrompt(Cmd):
                 else:
                     authors.update({authName:1})
                 if authors.get(authName) == K and len(authorsToExtract) < n:
-                        print("Found author "+authName)
+                        #print("Found author "+authName)
                         authorsToExtract.append(authName)
                 
         print(str(len(authorsToExtract))+" authors selected.")
-        print(authorsToExtract)
+        #print(authorsToExtract)
         print("Extracting...")
         current = os.getcwd()
         os.chdir(to)
-        for item in filesToExtract:
+        for item in tqdm(filesToExtract):
             dirs = item.filename.split("/")
             authName = dirs[2]
             if authName in authorsToExtract:
@@ -218,18 +218,20 @@ class MyPrompt(Cmd):
         """Builds and evaluates a Random Forest classifier for the chosen authors and features"""
         args = args.split(" ")
         n_est = 300
-        numAuthors = -1
+
         expName = "exp"
 
         if len(args) >= 1 and args[0] != '':
-            numAuthors = int(args[0])
+            maxDocs = int(args[0])
+        else:
+            maxDocs = float("inf")
         if len(args) >= 2:
             n_est = int(args[1])
         if len(args) >= 3:
             expName = args[2]
 
         if not self.ps.featuresDetected:
-            self.ps.detectFeatures(numAuthors)
+            self.ps.detectFeatures(maxDocs)
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import cross_val_score,ShuffleSplit
         from sklearn import metrics, utils
@@ -305,7 +307,7 @@ class MyPrompt(Cmd):
 
     #def do_compile(self, args):
     #    self.ps.compileAuthors()  
-        print("Compilation Complete")
+        #print("Compilation Complete")
         
         #self.ProfileSet.extractForAuthors()
         #self.do_save("")
@@ -415,4 +417,6 @@ if __name__ == '__main__':
     prompt = MyPrompt()
     prompt.prompt = 'coderID> '
     prompt.do_init("")
+    
+    #cProfile.run('prompt.do_classifyGCJ("")', sort="cumtime")
     prompt.cmdloop('Starting prompt...')

@@ -46,7 +46,7 @@ class featureExtractors:
             raise ValueError(msg)
 
     @staticmethod
-    def characterLevel(function:str):
+    def characterLevel(function):
         """ returns row vector in scipy.sparse.csr_matrix row format of features extracted from function string"""
         nfeatures = len(featureExtractors.charfeatureNames)
         features = np.zeros((nfeatures,), dtype=float)

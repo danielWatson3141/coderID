@@ -15,6 +15,8 @@ from sklearn.feature_selection import mutual_info_classif, SelectKBest
 from os import walk
 from numpy import ndarray
 
+from tqdm import tqdm
+
 class ProfileSet:
     
     def __init__(self, lang="cpp", config=None):
@@ -37,7 +39,7 @@ class ProfileSet:
             except TypeError:
                 dirs.extend(ProfileSet.listdir_fullpath(dir))
 
-        print("Added "+str(self.fileCount-preFileCount)+" files from "+str(len(dirs))+" authors.")
+        #print("Added "+str(self.fileCount-preFileCount)+" files from "+str(len(dirs))+" authors.")
 
     def authCount(self):
         return len(self.authors)
@@ -100,7 +102,7 @@ class ProfileSet:
             author.fileConcat()
             self.docs.extend(author.docs)
 
-    def detectFeatures(self, numAuthors):
+    def detectFeatures(self, maxDocs):
         
         inputs=[]
         self.target = []
@@ -109,15 +111,19 @@ class ProfileSet:
         tokfeatureNames = featureExtractors.featureExtractors.tokfeatureNames
         tokFeatures = None
 
-        print("Tokenizing...") # generating tokens/unigrams
-        authors_seen = 0
+        print("Extracting Features...") # generating tokens/unigrams
+        
         #fns_seen = 0
-        for author in self.authors.values():
-            if numAuthors != -1 and authors_seen == numAuthors:
-                    break
-            authors_seen += 1
+        for author in tqdm(self.authors.values()):
+            
+            import random
 
-            for doc in author.docs:
+            if len(author.docs) > maxDocs:
+                docs = random.sample(author.docs, maxDocs)
+            else:
+                docs = author.docs
+
+            for doc in docs:
                 #fns_seen += 1
                 # TODO: Issue - not full functions, so these features (apart
                 # from unigram) are somewhat useless or cannot be calculated
@@ -134,29 +140,24 @@ class ProfileSet:
                 except Exception:
                     print("failed parsing "+doc)
                     continue 
-                inputs.append(list(tokens))
+                
+                inputs.append(PPTools.Tokenize.tokensToText(tokens))
 
                 # Function-string level features
                 if charLevelFeatures is None:
                     charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
                 else:
-                    charLevelFeatures = vstack([charLevelFeatures,
-                                                featureExtractors.featureExtractors.characterLevel(fn_str)])
+                    charLevelFeatures = vstack([charLevelFeatures,featureExtractors.featureExtractors.characterLevel(fn_str)])
+
+                if tokFeatures is None:
+                    tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
+                else:
+                    tokFeatures = vstack([tokFeatures,featureExtractors.featureExtractors.tokenLevel(tokens)])
 
                 # Token-level features
                 self.target.append(author.name)
 
-        print("Textifying...") # converting back to a document
-        for i in range(0,len(inputs)):
-            if tokFeatures is None:
-                tokFeatures = featureExtractors.featureExtractors.tokenLevel(inputs[i])
-            else:
-                tokFeatures = vstack([tokFeatures,
-                                      featureExtractors.featureExtractors.tokenLevel(inputs[i])])
-
-
-            inputs[i] = PPTools.Tokenize.tokensToText(inputs[i]) #Convert to text
-
+       
         inputs = np.array(inputs)
         print("Vectorizing...")
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
@@ -177,12 +178,16 @@ class ProfileSet:
         print("Number of features before selection: {}".format(total_num_features))
 
         feature_mi = mutual_info_classif(self.counts, self.target)
-        relevant_features = [mi for mi in feature_mi if mi > 0]
-        min_mi = min(relevant_features)
-        n_relevant_features = sum([1 for mi in feature_mi if mi > .001])
+        print("Selecting features via mutual information....")
 
-        self.counts = SelectKBest(mutual_info_classif,
-                                  k = n_relevant_features).fit_transform(self.counts, self.target)
+        relevantIndeces = np.where(np.array(feature_mi) > .05)[0]
+        self.counts = self.counts[:,relevantIndeces]
+        self.terms = [self.terms[i] for i in relevantIndeces]
+        #min_mi = min(relevant_features)
+        n_relevant_features = len(relevantIndeces)
+
+        #self.counts = SelectKBest(mutual_info_classif,
+        #                         k = n_relevant_features).fit_transform(self.counts, self.target)
 
         print("Number of features after selection: {}".format(n_relevant_features))
         frac_selected = 100 * n_relevant_features / total_num_features
