@@ -1,4 +1,6 @@
 /extractionTarget/
 /100with100/
-/gcj
-.pyc
+*/gcj/*
+*.pyc
+*/.vscode/*
+*.csv
