@@ -13,6 +13,13 @@ import zipfile
 import string
 import gitProfileSet
 import ProfileSet
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_val_score,ShuffleSplit
+from sklearn import metrics, utils
+from sklearn.metrics import classification_report
+
+import csv
+
 
 from tqdm import tqdm
 
@@ -41,6 +48,7 @@ class MyPrompt(Cmd):
                 print("Failed to load file.")
                 os.remove(filePath)
 
+        
         self.ps=ProfileSet.ProfileSet(filePath)
         self.gitProfileSet = gitProfileSet.gitProfileSet()
         self.homeFilePath =filePath
@@ -83,12 +91,6 @@ class MyPrompt(Cmd):
 
         """Builds and evaluates a Random Forest classifier for the chosen authors and features"""
         
-        from sklearn.ensemble import RandomForestClassifier
-        from sklearn.model_selection import cross_val_score,ShuffleSplit
-        from sklearn import metrics, utils
-        from sklearn.metrics import classification_report
-
-        import csv
         
         args = args.split(" ")
         n_est = 300
@@ -169,19 +171,15 @@ class MyPrompt(Cmd):
                 row = [item[0]]
                 row.extend(item[1].values())
                 w.writerow(row)
-
-        #skip cross-validation for now
-
-        #compute CV scores
-        #print("Cross Validating...")
-        #clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
-
-        #cv = ShuffleSplit(n_splits=5, test_size=0.3)
-        #scores = cross_val_score(clf, features, targets, cv=cv)
-        #print(scores)
-        #print("CV Average:"+str(sum(scores)/5))
-        #print(clf.estimators_)
-
+        
+    def crossValidate(self, features, targets, n_est):
+        """Cross validate over the given data and return the scores"""
+        print("Cross Validating...")
+        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
+        cv = ShuffleSplit(n_splits=5, train_size=.2, test_size=.2)
+        scores = cross_val_score(clf, features, targets, cv=cv)
+        return(scores)
+        
 
     def do_pruneGit(self, args):
         """Limit to N authors with between k and m functions. 0 for unlimited"""
@@ -209,8 +207,6 @@ class MyPrompt(Cmd):
 
         self.gitProfileSet.authors = new
 
-
-
     def do_new(self, args):
         """Re-initializes profile set to be empty"""
         self.ps = ProfileSet.ProfileSet("")
@@ -231,6 +227,9 @@ class MyPrompt(Cmd):
         self.gitProfileSet.displayAuthors()
         #print(self.gitProfileSet)
 
+    def do_setOption(self, args):
+        """This method should take args option , value. Not implemented yet, check config issue on Github."""
+        pass
 
 
     def do_loadGitRepos(self, args):
@@ -260,9 +259,6 @@ class MyPrompt(Cmd):
             print("Problem during compilation. Saving...")
         
         self.do_save()
-
-    def do_setInfo(self, args):
-        gps = self.gitProfileSet
         
        
     def do_view(self, args):
