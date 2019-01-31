@@ -2,5 +2,6 @@
 /100with100/
 /gitsamples/
 /gcj1/
-/*/*.pyc
-/*.cid
+*.pyc
+*.cid
+*.csv*
