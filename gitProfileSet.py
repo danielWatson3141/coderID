@@ -4,6 +4,7 @@ import time
 import queue
 
 import PPTools
+import ast
 import pydriller
 import featureExtractors
 import multiprocessing
@@ -301,6 +302,8 @@ class gitProfileSet:
 
     def getFeatures(self, numAuthors):
         inputs=[]
+        node_types = []
+        code_unigrams = []
         self.target = []
         charfeatureNames = featureExtractors.featureExtractors.charfeatureNames
         charLevelFeatures = None
@@ -322,12 +325,23 @@ class gitProfileSet:
                     continue
                 
                 try:
-                    tokens = list(PPTools.Tokenize.fun(fun)) #Sometimes this  breaks for n.a.r.
+                    tu = PPTools.get_tu(fn_str)
+                    tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
+                    ast = ast.AST()
+                    ast.traverse(tu.cursor, 0)
+
+                    # TODO: concatenate in the featureExtractor module or here?
+                    node_types.append(" ".join(ast.node_types))
+                    code_unigrams.append(" ".join(ast.code_unigrams))
+
                 except Exception:
                     continue 
                 #inputs.append(list(tokens))
 
-
+                """
+                Bigram matrix:
+                Create a dok matrix (Dictionary Of Keys based sparse matrix) here
+                """
                 # Function-string level features
                 if charLevelFeatures is None:
                     charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
@@ -335,11 +349,16 @@ class gitProfileSet:
                     charLevelFeatures = vstack([charLevelFeatures,
                                                 featureExtractors.featureExtractors.characterLevel(fn_str)])
 
+
                 # Token-level 
                 if tokFeatures is None:
                     tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
                 else:
                     tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
+
+                # Token-level features
+                self.target.append(author.name)
+                del tokens
 
                 inputs.append(PPTools.Tokenize.tokensToText(tokens)) #Convert to text
 
@@ -348,17 +367,36 @@ class gitProfileSet:
             
             
         inputs = np.array(inputs)
+
+        # TODO: abstract this out since it gets used a lot.
         print("Vectorizing...")
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
                                        decode_error="ignore", lowercase=False)
+        vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S*",
+                                        decode_error="ignore", lowercase=False,
+                                        use_idf=False)
 
-        #vectorizer.fit(inputs)
-        self.counts = vectorizer.fit_transform(inputs) # unigrams
+        self.counts = hstack([charLevelFeatures, tokFeatures], format = 'csr')
+        self.terms = charfeatureNames + tokfeatureNames
 
-        # full feature set
-        self.counts = hstack([self.counts, charLevelFeatures, tokFeatures], format='csr')
-        self.terms = vectorizer.get_feature_names() + charfeatureNames + \
-                     tokfeatureNames
+        # The full feature set
+        need_tf = False
+        for features in [inputs, node_types, code_unigrams]:
+            # TFIDF
+            self.counts = hstack([self.counts, vectorizer.fit_transform(features)],
+                                 format = 'csr')
+            self.terms += vectorizer.get_feature_names()
+
+            # Get only the term frequencies
+            if need_tf:
+                self.counts = hstack([self.counts, vectorizer_tf.fit_transform(features)],
+                                     format = 'csr')
+                self.terms += vectorizer_tf.get_feature_names()
+            else:
+                # accounts for the fact that we do not need the TF of the unigrams/inputs
+                need_tf = False
+
+        del inputs, node_types, code_unigrams
         self.target = np.array(self.target)
 
         # First round feature selection using mutual information
