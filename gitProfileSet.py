@@ -323,16 +323,18 @@ class gitProfileSet:
                 #whitespace fn's still getting in. This will catch for that.
                 if fn_str.isspace() or fn_str == '':
                     continue
-                
+
                 try:
-                    tu = PPTools.get_tu(fn_str)
+                    tu = PPTools.Tokenize.get_tu(fn_str)
                     tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
-                    ast = ast.AST()
-                    ast.traverse(tu.cursor, 0)
+                    tree = ast.AST()
+                    tree.traverse(tu.cursor)
 
                     # TODO: concatenate in the featureExtractor module or here?
-                    node_types.append(" ".join(ast.node_types))
-                    code_unigrams.append(" ".join(ast.code_unigrams))
+                    node_types.append(" ".join(tree.node_types))
+                    code_unigrams.append(" ".join(tree.code_unigrams))
+
+                    # delete tree here
 
                 except Exception:
                     continue 
