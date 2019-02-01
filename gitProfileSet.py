@@ -309,17 +309,12 @@ class gitProfileSet:
 
         print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
-        #fns_seen = 0
         for author in tqdm(self.authors.values()):
             if numAuthors != -1 and authors_seen == numAuthors:
                     break
             authors_seen += 1
 
             for fun in author.functions:
-                #fns_seen += 1
-                # TODO: Issue - not full functions, so these features (apart
-                # from unigram) are somewhat useless or cannot be calculated
-
                 fn_str = '\n'.join(fun.values())
 
                 #whitespace fn's still getting in. This will catch for that.
