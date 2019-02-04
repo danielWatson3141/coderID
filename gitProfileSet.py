@@ -4,7 +4,7 @@ import time
 import queue
 
 import PPTools
-import ast
+import ASTFeatureExtractor
 import pydriller
 import featureExtractors
 import multiprocessing
@@ -312,7 +312,7 @@ class gitProfileSet:
 
         print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
-        for author in tqdm(self.authors.values()):
+        for author in self.authors.values():
             if numAuthors != -1 and authors_seen == numAuthors:
                     break
             authors_seen += 1
@@ -327,18 +327,18 @@ class gitProfileSet:
                 try:
                     tu = PPTools.Tokenize.get_tu(fn_str)
                     tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
-                    tree = ast.AST()
-                    tree.traverse(tu.cursor)
+                    inputs.append(PPTools.Tokenize.tokensToText(tokens))  # Convert to text
+
+                    tree = ASTFeatureExtractor.AST(tu.cursor)
+                    tree.traverse()
 
                     # TODO: concatenate in the featureExtractor module or here?
                     node_types.append(" ".join(tree.node_types))
                     code_unigrams.append(" ".join(tree.code_unigrams))
-
-                    # delete tree here
+                    del tree
 
                 except Exception:
-                    continue 
-                #inputs.append(list(tokens))
+                    continue
 
                 """
                 Bigram matrix:
@@ -352,21 +352,14 @@ class gitProfileSet:
                                                 featureExtractors.featureExtractors.characterLevel(fn_str)])
 
 
-                # Token-level 
+                # Token-level features
                 if tokFeatures is None:
                     tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
                 else:
                     tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
 
-                # Token-level features
                 self.target.append(author.name)
                 del tokens
-
-                inputs.append(PPTools.Tokenize.tokensToText(tokens)) #Convert to text
-
-                self.target.append(author.name)
-
-            
             
         inputs = np.array(inputs)
 
@@ -383,7 +376,10 @@ class gitProfileSet:
 
         # The full feature set
         need_tf = False
+
+        i = 0
         for features in [inputs, node_types, code_unigrams]:
+            i += 1
             # TFIDF
             self.counts = hstack([self.counts, vectorizer.fit_transform(features)],
                                  format = 'csr')
@@ -396,9 +392,10 @@ class gitProfileSet:
                 self.terms += vectorizer_tf.get_feature_names()
             else:
                 # accounts for the fact that we do not need the TF of the unigrams/inputs
-                need_tf = False
+                need_tf = True
 
         del inputs, node_types, code_unigrams
+
         self.target = np.array(self.target)
 
         # First round feature selection using mutual information
@@ -411,12 +408,8 @@ class gitProfileSet:
         relevantIndeces = np.where(np.array(feature_mi) > .01)[0]
         self.counts = self.counts[:,relevantIndeces]
         self.terms = [self.terms[i] for i in relevantIndeces]
-       
-        #min_mi = min(relevant_features)
-        n_relevant_features = len(relevantIndeces)
 
-        #self.counts = SelectKBest(mutual_info_classif,
-        #                         k = n_relevant_features).fit_transform(self.counts, self.target)
+        n_relevant_features = len(relevantIndeces)
 
         print("Number of features after selection: {}".format(n_relevant_features))
         frac_selected = 100 * n_relevant_features / total_num_features

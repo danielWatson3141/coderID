@@ -1,4 +1,5 @@
 import os.path
+import platform
 from clang import cindex
 
 def is_number(s):
@@ -32,13 +33,10 @@ class PreProcessor:
 class Tokenize:
 
     #TODO: Make linux-worthy
-    # changed to work for Mac; not tested for linux
-
-    """
-    if not cindex.Config.loaded:
+    if platform.system() == 'Darwin' and not cindex.Config.loaded:
        cindex.Config.set_library_file(
             '/usr/local/Cellar/llvm/7.0.1/lib/libclang.dylib')
-    """
+
 
     @staticmethod
     def tokenize(file):
