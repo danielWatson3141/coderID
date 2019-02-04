@@ -1,4 +1,5 @@
 import os.path
+import platform
 from clang import cindex
 
 def is_number(s):
@@ -32,13 +33,10 @@ class PreProcessor:
 class Tokenize:
 
     #TODO: Make linux-worthy
-    # changed to work for Mac; not tested for linux
-
-    """
-    if not cindex.Config.loaded:
+    if platform.system() == 'Darwin' and not cindex.Config.loaded:
        cindex.Config.set_library_file(
             '/usr/local/Cellar/llvm/7.0.1/lib/libclang.dylib')
-    """
+
 
     @staticmethod
     def tokenize(file):
@@ -112,8 +110,14 @@ class Tokenize:
     def cpp(file):
         idx = cindex.Index.create()
         tu = idx.parse(file,args=['-std=c++11'],options=0)
-        return tu.get_tokens(extent=tu.cursor.extent) 
+        return tu.get_tokens(extent=tu.cursor.extent)
 
+    @staticmethod
+    def get_tu(fn_str):
+        idx = cindex.Index.create()
+        filename = 'tmp.c'
+        return idx.parse(filename, unsaved_files=[(filename, fn_str)],
+                         args=['-std=c++11'], options=0)
 
 
 
