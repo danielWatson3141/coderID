@@ -22,7 +22,7 @@ This tool requires Python 3 and certain Python packages to run. The best way to 
 3. Install all the necessary packages and their requirements. These can be found in the requirements.txt file in this repository.
 
     ```bash
-    pip install -r requirements.txt # not using conda
+    pip install -r requirements.txt
     ```
 
 4. Activate your environment.
