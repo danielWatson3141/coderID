@@ -27,8 +27,9 @@ class gitProfileSet:
     #TODO: Make sibling class of ProfileSet
     
     langList =["cpp", "c"]
-    def __init__(self):
+    def __init__(self, name):
         """Initialize a new gitset"""
+        self.name = name
         self.repos = []
         self.authors = dict()
         self.featuresDetected = False
@@ -41,62 +42,13 @@ class gitProfileSet:
                 self.repos.append(args)
         except Exception:
             print("Couldn't get that one...")
-        #self.compileAuthors(newRepo)
-
-            
-    @staticmethod
-    def processCommits(commitQ, infoQ, bm):
-
-        while True:
-            if commitQ.empty():
-                time.sleep(.1)
-                continue
-            
-            repo, commit = commitQ.get()
-
-            if commit == "DONE":
-                commitQ.put((repo, commit))
-                break
-            
-            info = bm.gitInfo(repo, commit)
-            infoQ.put(info)
-    
-    @staticmethod
-    def mineRepo(repo, queue):
-        """Mine repos for relevant commits. Populates queue."""
-        miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
-        print("Scanning repo: "+miner._path_to_repo)
-        commitList = miner.traverse_commits()
-        
-        tipeCounts = dict()
-        for commit in commitList:
-            tipe = commitType.categorize(commit)
-
-            if tipe not in tipeCounts:
-                tipeCounts.update({tipe: 0})
-            count = tipeCounts.get(tipe)
-            tipeCounts.update({tipe: count+1})
-
-
-            if tipe is commitType.FEATURE:
-                comm = (repo, commit.hash)
-                queue.put(comm)
-            
-        print(str("finished"+str(miner._path_to_repo)))
-        print("types: "+str(tipeCounts))
-    
+        #self.compileAuthors(newRepo)    
           
     #TODO: take args from cli
     def compileAuthors(self, minAuth = 25, minDocs = 9):
         import sys
         platform = sys.platform
-        # This is disabled for now. Probably permanently
-        if platform is None: #or platform is "darwin":
-            print("Doing work in parellel")
-            self.compileInParellel()
-        else:
-            print("Doing work in sequence")
-            self.compileInSequence(minAuth, minDocs)
+        self.compileInSequence(minAuth, minDocs)
 
     def compileInSequence(self, minAuthors, minDocs):
         
@@ -182,125 +134,12 @@ class gitProfileSet:
 
 
 
-
-    def compileInParellel(self):
-        print("Gathering Author data...")
-        
-        startTime = time.time()
-
-        #time.sleep(10)
-        m = multiprocessing.Manager()
-        
-        multiprocessing.managers.BaseManager.register('gitInfo', gitInfo) #register gitAuthor to synchronize it
-        
-        bm = multiprocessing.managers.BaseManager() #to create author objects
-
-        bm.start()
-
-        #authorDict = m.dict()           #make thread managed dict
-
-
-        #----------------Set up consumer process
-        producerWorkers = 2
-        consumerWorkers = 4     #How many processes should consume commits
-
-        producerQ = queue.Queue()        #use regular queue here
-        consumerQ = queue.Queue()
-        repoQ = queue.Queue()
-        
-        for repo in self.repos:
-            repoQ.put(repo)
-
-        commitQ = m.Queue()
-        infoQ = m.Queue()
-        
-        for i in range(1,consumerWorkers):
-            newP = multiprocessing.Process(target=gitProfileSet.processCommits, 
-                           args=(commitQ, infoQ, bm))
-            newP.start()
-            consumerQ.put(newP)
-
-            if i <= producerWorkers:
-                nextRepo = repoQ.get()
-                newP = multiprocessing.Process(target=gitProfileSet.mineRepo, 
-                    args=(nextRepo, commitQ))
-                newP.start()
-                producerQ.put(newP)
-            
-
-
-
-        print("Consumers Started")      
-        prodDone = False
-        conDone = False
-        verbosity = 25
-        cur = 0
-        finished = 0
-        while True:
-            
-            
-            if cur == verbosity:
-                print("CommitQ: "+str(commitQ.qsize()))
-                print("InfoQ: "+str(infoQ.qsize()))
-                cur = 0
-                if prodDone:
-                    remaining = commitQ.qsize() + infoQ.qsize()
-                    elapsedTime = time.time() - startTime
-                    rate = finished / elapsedTime
-                    remainingTime = remaining / rate
-                    print("Est. time remaining: "+str(remainingTime/60)+" minutes.")
-
-            else:
-                cur+=1
-
-            if not producerQ.empty():     #cycle through the processes,
-                process = producerQ.get()
-                if process.is_alive():       #If alive, keep in the queue
-                    producerQ.put(process)
-                elif not repoQ.empty():
-                    nextRepo = repoQ.get()
-                    newP = multiprocessing.Process(target=gitProfileSet.mineRepo, 
-                           args=(nextRepo, commitQ))
-                    newP.start()
-                    producerQ.put(newP)
-                
-            elif not prodDone:
-                print("Producers done.")
-                commitQ.put(("DONE","DONE"))   #Do this to signal no more commits to the consumer
-                prodDone = True
-
-            if not consumerQ.empty():
-                process = consumerQ.get()
-                if process.is_alive():
-                    consumerQ.put(process)
-            elif not conDone:
-                print("Consumers done.")
-                conDone = True
-
-            if infoQ.empty():
-                if conDone and prodDone:
-                    break
-                else:
-                     time.sleep(.1) #wait a bit
-            else:
-                info = infoQ.get()
-                if info.getauthorName() not in self.authors:
-                    self.authors.update({info.getauthorName():gitAuthor(info.getDev())})
-                author = self.authors.get(info.getauthorName())
-                author.updateFromCommitInfo(info)
-                finished += 1
-
-        print("Shutting down manager.")
-        bm.shutdown()                   #Close now that work is done
-        self.displayAuthors()
-        return
-
     def displayAuthors(self):
         for value in self.authors.values():
             print(value)
 
 
-    def getFeatures(self, numAuthors):
+    def getFeatures(self, numAuthors=-1):
         inputs=[]
         node_types = []
         code_unigrams = []

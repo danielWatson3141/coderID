@@ -17,6 +17,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score,ShuffleSplit
 from sklearn import metrics, utils
 from sklearn.metrics import classification_report
+import numpy as np
 
 import csv
 
@@ -30,53 +31,91 @@ class MyPrompt(Cmd):
     #TODO: move utils into PPTools
     #TODO: task queue-ify execution
 
-    def do_init(self, filePath):
+    def do_init(self):
         """Initialize profile set. non-existent file will create new  args: filePath"""
         #os.environ["DYLD_LIBRARY_PATH"] = "/usr/local/Cellar/llvm/7.0.1/lib/"
         self.featuresDetected = False
-        if filePath == '': 
-            filePath = os.getcwd()+"/default.cid"
             
+        self.gpsList = list()
+        self.saveLocation = os.getcwd()+"/savedSets/"
 
-        if os.path.isfile(filePath):
-            try:
-                self.do_load(filePath)
-                self.homeFilePath =filePath
-                print("Home filepath is "+filePath)
-                return
-            except Exception:
-                print("Failed to load file.")
-                os.remove(filePath)
+        if not os.path.isdir(self.saveLocation):
+            os.mkdir(self.saveLocation)
 
+        for fileName in os.listdir(self.saveLocation):
+            self.gpsList.append(fileName)
+
+        if len(self.gpsList) is not 0:
+            self.do_load(self.gpsList[0])
+        else:
+            self.activegps = gitProfileSet.gitProfileSet("default")
+
+        print("Current set: "+self.activegps.name)
         
-        self.ps=ProfileSet.ProfileSet(filePath)
-        self.gitProfileSet = gitProfileSet.gitProfileSet()
-        self.homeFilePath =filePath
-        print("Home filepath is "+filePath)
-
+        
 
     def do_save(self, filepath=''):
-        """Saves state, overwriting given file"""
+        """Saves active gps, overwriting given file. Also used to rename set."""
         
+        workingName = self.activegps.name
+            
         print("saving...")
         if(filepath is ''):
-            filepath = self.homeFilePath
+            if workingName is "default":
+                print("Note: saving under default, this is not recommended. Type a new name or press ENTER to accept: ")
+                newName = input()
+            else:
+                newName = workingName
         else:
-            self.homeFilePath = filepath 
+            newName = filepath 
+
+        self.activegps.name = newName
         
-        file = open(self.homeFilePath, 'wb')
+        file = open(os.getcwd()+"/savedSets/"+newName, 'wb')
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
         import copy
-        pickler.dump((self.ps, copy.deepcopy(self.gitProfileSet))) #save after Compile may be broken by this
-        print("Saved to "+self.homeFilePath)
+        pickler.dump(copy.deepcopy(self.activegps))
+        self.gpsList.append(newName)
+        
+        print("Saved to "+newName)
 
     def do_load(self, args):
-        """loads profileSet from file"""
-        if(args == None):
-            self.do_load(self.homeFilePath)
-        if(os.path.isfile(args)):
-            file = open(args, 'rb')
-            self.ps, self.gitProfileSet = pickle.Unpickler(file).load() #load
+        """Switches currently active gps to one with given name. ***PROLLY SHOULD SAVE FIRST***"""
+        if(args == ""):
+            print("Error, must supply name of existing gps. Use 'new' to start a fresh one.")
+        for gpsFile in self.gpsList:
+            path, extension = os.path.splitext(gpsFile)
+            fileName = path.split("/")[-1]
+            if args == fileName:
+                file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
+                self.activegps = pickle.Unpickler(file).load()
+                break
+    
+    def do_ls(self, args):
+        """List all available profile sets"""
+        for gpsFile in self.gpsList:
+            if self.activegps.name == gpsFile:
+                print(gpsFile+"*")
+            else:
+                print(gpsFile)
+        
+    def do_rm(self, args):
+        """Removes a specified gps permanently. pass * to remove all."""
+
+        for gpsFile in self.gpsList:
+            if gpsFile == args:
+                os.remove(self.saveLocation+gpsFile)
+                self.gpsList.remove(gpsFile)
+                break
+            if args == "*":
+                os.remove(self.saveLocation+gpsFile)
+        
+
+
+
+
+                
+    
 
     def do_quit(self, args):
         """quits the program WITHOUT SAVING"""
@@ -105,16 +144,16 @@ class MyPrompt(Cmd):
             expName = args[2]
 
 
-        if not self.gitProfileSet.featuresDetected:
+        if not self.activegps.featuresDetected:
             print("Running Feature Detection")
-            self.gitProfileSet.getFeatures(numAuthors = numAuthors)
+            self.activegps.getFeatures(numAuthors = numAuthors)
 
         print("Generating CM")
-        n_samples = len(self.gitProfileSet.target)
+        n_samples = len(self.activegps.target)
         clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
         
         #shuffle the dataset
-        features, targets = utils.shuffle(self.gitProfileSet.counts, self.gitProfileSet.target)
+        features, targets = utils.shuffle(self.activegps.counts, self.activegps.target)
         
         #fit the model to the first 2/3 of the samples
         clf.fit(features[:(n_samples//3)*2], targets[:(n_samples//3)*2])
@@ -128,7 +167,7 @@ class MyPrompt(Cmd):
         
         
         #Compute best 50 features
-        best = self.bestNFeatures(clf.feature_importances_, self.gitProfileSet.terms, 50)
+        best = self.bestNFeatures(clf.feature_importances_, self.activegps.terms, 50)
 
         import csv
 
@@ -171,6 +210,94 @@ class MyPrompt(Cmd):
                 row = [item[0]]
                 row.extend(item[1].values())
                 w.writerow(row)
+
+    def do_match(self, args):
+        """search for matches in a target repo"""
+        self.detectKnownAuthors(args)
+
+    def detectKnownAuthors(self, targetRepo, maxFP=.1, n_est = 300):
+        """Given a target repo, attempt to identify any code in said repo written by any author in the gps. Will set ROC point such that FPR <= maxFP"""
+        
+        #cross validate, generating a two lists:
+            #(success: bool)
+            #(confidence: num)
+        
+        success = 0 #temporary
+        confidence = 0 #temporary
+
+        decisionPoint = self.decisionMaximizationProcedure(success, confidence)
+
+        targetGPS = gitProfileSet.gitProfileSet("default")
+        targetGPS.addRepo(targetRepo)
+
+        targetGPS.compileAuthors()
+        targetGPS.getFeatures()
+
+        if not self.activegps.featuresDetected:
+            print("Running Feature Detection")
+            self.activegps.getFeatures()
+        
+        #train a classifier on entire self dataset
+
+        clf = RandomForestClassifier(n_estimators=n_est, max_features="sqrt")
+        
+        clf.fit(self.activegps.counts, self.activegps.targets)
+
+        pred = clf.predict_proba(targetGPS.counts)  # get matrix of class probabilities
+
+        #return matches as list of sets corresponding to the people matched to each document.
+
+        for document in pred:
+            pass                #
+
+
+
+        
+
+
+
+    
+    def decisionMaximizationProcedure(self, success:np.array, confidence:np.array, maxFP=.1, precision = .01):
+        """return the highest d such that P(success| confidence > d) >= 1-maxFP"""
+
+        if len(success) != len(confidence):
+            raise Exception("success and confidence vectors must be equal in length")
+
+        corclass = confidence[success]      #Confidence in correct instances
+        misclass = confidence[not success]  #Confidence in incorrect instances
+
+        totalCount = len(success)
+        
+        #If misclassification rate is less than maximum false positive rate then the optimal cut-off is is the minimum of the correct instances
+        if len(misclass) < maxFP*totalCount:
+            return min(corclass)
+        
+
+        upper = 1
+        lower = 0
+        d = .5
+        fp = 1
+
+        maxIter = 10
+        iterCount = 0   #Don't iterate more than ten times. Necessary to prevent infinite loop on small datasets
+
+        while (fp > maxFP+precision or fp < maxFP-precision) and iterCount < maxIter:
+            
+            iterCount += 1
+
+            d = (upper+lower)/2
+            
+            fp = len(np.where(misclass>d))/totalCount   #fp rate with d at its current value
+
+            if fp < maxFP:
+                upper = d
+            else:
+                lower = d
+
+        if iterCount == 10:
+            print("terminated after 10 iterations. This is problematic.")
+        return d
+
         
     def crossValidate(self, features, targets, n_est):
         """Cross validate over the given data and return the scores"""
@@ -193,7 +320,7 @@ class MyPrompt(Cmd):
         m= int(args[2])
         
         print("Pruning Authors")
-        old = self.gitProfileSet.authors
+        old = self.activegps.authors
 
         new = dict()
         count = 0
@@ -205,13 +332,17 @@ class MyPrompt(Cmd):
                 if count == n and n != 0:
                     break
 
-        self.gitProfileSet.authors = new
+        self.activegps.authors = new
 
     def do_new(self, args):
         """Re-initializes profile set to be empty"""
-        self.ps = ProfileSet.ProfileSet("")
-        self.gitProfileSet = gitProfileSet.gitProfileSet()
-        self.featuresDetected=False
+        if args == "":
+            print("No name given, initializing to \"default\"")
+            self.activegps = gitProfileSet.gitProfileSet("default")
+        else:
+            self.activegps = gitProfileSet.gitProfileSet(args)
+            self.gpsList.append(args)
+            
 
     
     def do_loadGit(self, args):
@@ -219,13 +350,13 @@ class MyPrompt(Cmd):
         if args =="":
             print("Must enter a path to a git repo.")
         for filePath in args.split(" "):
-            self.gitProfileSet.addRepo(filePath)
+            self.activegps.addRepo(filePath)
         self.do_displayGitAuthors("")
 
     def do_displayGitAuthors(self, args):
         """Displays all authors found in the currently loaded git repos"""
-        self.gitProfileSet.displayAuthors()
-        #print(self.gitProfileSet)
+        self.activegps.displayAuthors()
+        #print(self.activegps)
 
     def do_setOption(self, args):
         """This method should take args option , value. Not implemented yet, check config issue on Github."""
@@ -242,7 +373,7 @@ class MyPrompt(Cmd):
             lim = int(args[1])
         else:
             lim = float("inf")
-        repos = self.ps.listdir_fullpath(args[0])
+        repos = ProfileSet.listdir_fullpath(args[0])
         for i in range(0,min(len(repos), lim)):
             if not os.path.basename(repos[i])[0]==".":
                 self.do_loadGit(repos[i])
@@ -251,9 +382,9 @@ class MyPrompt(Cmd):
         args = args.split(" ")
        # try:
         if len(args) > 1:
-            self.gitProfileSet.compileAuthors(int(args[0]), int(args[1]) )
+            self.activegps.compileAuthors(int(args[0]), int(args[1]) )
         else:
-            self.gitProfileSet.compileAuthors()
+            self.activegps.compileAuthors()
         print("Compilation Complete")
         #except Exception:
          #   print("Problem during compilation. Saving...")
@@ -267,7 +398,7 @@ class MyPrompt(Cmd):
         try:
             args = args.split(":")
             
-            author = self.gitProfileSet.authors.get(args[0])
+            author = self.activegps.authors.get(args[0])
             
 
             args = args[1].strip().split(" ")
@@ -363,7 +494,7 @@ class MyPrompt(Cmd):
         predictions = model.predict(features[n_samples//2:])
 
         cm = metrics.confusion_matrix(expected, predictions)
-        sortedAuthors = sorted(self.gitProfileSet.authors.keys(), reverse=False)
+        sortedAuthors = sorted(self.activegps.authors.keys(), reverse=False)
         authCount = numAuthors
         if numAuthors == -1:
             authCount = len(sortedAuthors)
@@ -408,7 +539,7 @@ if __name__ == '__main__':
     try:
         prompt = MyPrompt()
         prompt.prompt = 'coderID> '
-        prompt.do_init("")
+        prompt.do_init()
         prompt.cmdloop('Starting prompt...')
     except MemoryError:
         sys.stderr.write('\n\nERROR: Memory Exception\n')
