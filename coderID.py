@@ -38,6 +38,7 @@ class MyPrompt(Cmd):
             
         self.gpsList = list()
         self.saveLocation = os.getcwd()+"/savedSets/"
+        self.resultLocation = os.getcwd()+"/classResults/"
 
         if not os.path.isdir(self.saveLocation):
             os.mkdir(self.saveLocation)
@@ -50,6 +51,7 @@ class MyPrompt(Cmd):
         else:
             self.activegps = gitProfileSet.gitProfileSet("default")
 
+        self.prompt = self.activegps.name+">"
         print("Current set: "+self.activegps.name)
         
         
@@ -75,7 +77,8 @@ class MyPrompt(Cmd):
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
         import copy
         pickler.dump(copy.deepcopy(self.activegps))
-        self.gpsList.append(newName)
+        if newName not in self.gpsList:
+            self.gpsList.append(newName)
         
         print("Saved to "+newName)
 
@@ -87,9 +90,13 @@ class MyPrompt(Cmd):
             path, extension = os.path.splitext(gpsFile)
             fileName = path.split("/")[-1]
             if args == fileName:
-                file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
-                self.activegps = pickle.Unpickler(file).load()
+                self.activegps = self.loadGPSFromFile(args)
+                self.prompt = self.activegps.name+">"
                 break
+
+    def loadGPSFromFile(self, fileName):
+        file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
+        return pickle.Unpickler(file).load() 
     
     def do_ls(self, args):
         """List all available profile sets"""
@@ -109,14 +116,19 @@ class MyPrompt(Cmd):
                 break
             if args == "*":
                 os.remove(self.saveLocation+gpsFile)
+
+    def do_mineDirectory(self, directory):
+        """Mine all repos in directory and save the output"""
+
+        if not os.path.isdir(directory):
+            print("Not a directory!")
+            return
+
+        for subdir in os.listdir(directory):
+            self.do_new(subdir)
+            self.do_loadGit(directory+"/"+subdir)
+            self.do_compile("")
         
-
-
-
-
-                
-    
-
     def do_quit(self, args):
         """quits the program WITHOUT SAVING"""
         print("Quitting.")
@@ -134,7 +146,7 @@ class MyPrompt(Cmd):
         args = args.split(" ")
         n_est = 300
         numAuthors = -1
-        expName = "exp"
+        expName = self.activegps.name
 
         if len(args) >= 1 and args[0] != '':
             numAuthors = int(args[0])
@@ -148,12 +160,15 @@ class MyPrompt(Cmd):
             print("Running Feature Detection")
             self.activegps.getFeatures(numAuthors = numAuthors)
 
+        if self.activegps.featuresSelected is None:
+            self.activegps.featureSelect()
+
         print("Generating CM")
         n_samples = len(self.activegps.target)
         clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
         
         #shuffle the dataset
-        features, targets = utils.shuffle(self.activegps.counts, self.activegps.target)
+        features, targets = utils.shuffle(self.activegps.featuresSelected, self.activegps.target)
         
         #fit the model to the first 2/3 of the samples
         clf.fit(features[:(n_samples//3)*2], targets[:(n_samples//3)*2])
@@ -172,7 +187,7 @@ class MyPrompt(Cmd):
         import csv
 
         #write best features
-        with open(expName+"_best_features.csv", 'w') as csvfile:
+        with open(self.resultLocation+expName+"_best_features.csv", 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
             
@@ -185,7 +200,7 @@ class MyPrompt(Cmd):
         print(cm)
 
         #write confusion matrix
-        with open(expName+"CM.csv", 'w') as csvfile:
+        with open(self.resultLocation+expName+"CM.csv", 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
             for row in cm:
@@ -198,7 +213,7 @@ class MyPrompt(Cmd):
         print(classification_report(expected, predictions))
         #write classification report
 
-        with open(expName+"_report.csv", 'w') as reportFile:
+        with open(self.resultLocation+expName+"_report.csv", 'w') as reportFile:
             w = csv.writer(reportFile)
 
             oneSample = list(classReport.items())[0]
@@ -221,41 +236,47 @@ class MyPrompt(Cmd):
         #cross validate, generating a two lists:
             #(success: bool)
             #(confidence: num)
-        
-        success = 0 #temporary
-        confidence = 0 #temporary
+
+        if not self.activegps.featuresDetected:     #get features of currently active repo
+            self.activegps.getFeatures()
+            self.do_save("")
+
+        if self.activegps.featuresSelected is None:
+            self.activegps.featureSelect()
+            self.do_save("")
+
+        success, confidence = self.determineConfidence(self.activegps.featuresSelected, self.activegps.target)    #determine confidence of resolved classifier
 
         decisionPoint = self.decisionMaximizationProcedure(success, confidence)
 
-        targetGPS = gitProfileSet.gitProfileSet("default")
-        targetGPS.addRepo(targetRepo)
 
-        targetGPS.compileAuthors()
-        targetGPS.getFeatures()
-
-        if not self.activegps.featuresDetected:
-            print("Running Feature Detection")
-            self.activegps.getFeatures()
+        try:
+            targetgps = self.loadGPSFromFile(targetRepo)
+        except FileNotFoundError:
+            print("Target GPS not found. Compile it first.")
+            return
+        
+        if not targetgps.featuresDetected():
+            targetgps.getFeatures()
         
         #train a classifier on entire self dataset
 
         clf = RandomForestClassifier(n_estimators=n_est, max_features="sqrt")
         
-        clf.fit(self.activegps.counts, self.activegps.targets)
+        clf.fit(self.activegps.featuresSelected, self.activegps.targets)
 
-        pred = clf.predict_proba(targetGPS.counts)  # get matrix of class probabilities
+        pred = clf.predict_proba(targetgps.counts[:,self.activegps.selectedIndeces])  # get matrix of class probabilities
 
-        #return matches as list of sets corresponding to the people matched to each document.
+        for sample, target in zip(pred, targetgps.target):
+                predIndex = np.argmax(sample)
+                prediction = clf.classes_[predIndex]  #get item with max probability
+                confidence = sample[predIndex]
+                success = prediction == target #record whether the result was correct
 
-        for document in pred:
-            pass                #
-
-
-
-        
-
-
-
+                if confidence > decisionPoint:
+                    print("Match: "+ prediction+", "+target+", "+confidence)
+                
+                
     
     def decisionMaximizationProcedure(self, success:np.array, confidence:np.array, maxFP=.1, precision = .01):
         """return the highest d such that P(success| confidence > d) >= 1-maxFP"""
@@ -282,6 +303,7 @@ class MyPrompt(Cmd):
         iterCount = 0   #Don't iterate more than ten times. Necessary to prevent infinite loop on small datasets
 
         while (fp > maxFP+precision or fp < maxFP-precision) and iterCount < maxIter:
+
             
             iterCount += 1
 
@@ -289,6 +311,8 @@ class MyPrompt(Cmd):
             
             fp = len(np.where(misclass>d))/totalCount   #fp rate with d at its current value
 
+            print("d: "+d+" "+"fp: "+fp)
+            
             if fp < maxFP:
                 upper = d
             else:
@@ -299,13 +323,56 @@ class MyPrompt(Cmd):
         return d
 
         
-    def crossValidate(self, features, targets, n_est):
+    def determineConfidence(self, features, targets, n_est = 300):
         """Cross validate over the given data and return the scores"""
         print("Cross Validating...")
         clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
-        cv = ShuffleSplit(n_splits=5, train_size=.2, test_size=.2)
-        scores = cross_val_score(clf, features, targets, cv=cv)
-        return(scores)
+        numSamples = features.shape[0]
+        train_size=min(1000 ,  numSamples* .5)
+        test_size=min(200 ,  numSamples* .2)
+        splits = 3
+
+        cv = ShuffleSplit(n_splits=splits, train_size=train_size, test_size=test_size)
+        
+        success = np.empty((test_size*splits))
+        confidence = np.empty((test_size*splits))
+        index = 0
+
+        for train, test in cv.split(features):
+            
+            trainingSet = (features[train], targets[train]) #Select training set
+
+            clf.fit(trainingSet[0], trainingSet[1])         #train model
+
+            testSet = (features[test], targets[test])       #Select test set
+
+            probabilities = clf.predict_proba(testSet[0])   #predict probabilities over test set
+            
+            for sample, target in zip(probabilities, testSet[1]):
+                predIndex = np.argmax(sample)
+                prediction = clf.classes_[predIndex]  #get item with max probability
+
+                success[index] = prediction == target #record whether the result was correct
+                confidence[index] = sample[predIndex] #record the confidence of the result
+                index += 1
+
+        return (success, confidence)
+
+    def do_authorsInCommon(self, args):
+        for file1 in os.listdir(self.saveLocation):
+            for file2 in os.listdir(self.saveLocation):
+                if file1 == file2:
+                    break
+                gps1 = self.loadGPSFromFile(file1)
+                gps2 = self.loadGPSFromFile(file2)
+                inCommon = self.authorsInCommon(gps1, gps2)
+                
+                if inCommon: #if not empty
+                    print(file1+", "+file2+": "+str(inCommon))
+
+
+    def authorsInCommon(self, gps1, gps2):
+        return [author for author in gps1.authors.keys() if author in gps2.authors]
         
 
     def do_pruneGit(self, args):
@@ -342,9 +409,9 @@ class MyPrompt(Cmd):
         else:
             self.activegps = gitProfileSet.gitProfileSet(args)
             self.gpsList.append(args)
-            
 
-    
+        self.prompt = self.activegps.name+">"
+             
     def do_loadGit(self, args):
         """Loads a single git repo"""
         if args =="":
@@ -379,6 +446,7 @@ class MyPrompt(Cmd):
                 self.do_loadGit(repos[i])
 
     def do_compile(self, args):
+        """Mine the selected repos for relevant commits. Saves automatically upon completion, so if you want a name other than default save it first"""
         args = args.split(" ")
        # try:
         if len(args) > 1:
@@ -517,6 +585,10 @@ class MyPrompt(Cmd):
         import operator
         sortedMatch = sorted(match.items(), key=operator.itemgetter(1), reverse=True)
         return sortedMatch[0:n]
+
+    def do_gpsInfo(self, args):
+        """print basic info about this gps"""
+        print(self.activegps)
 
     
 def memory_limit():
