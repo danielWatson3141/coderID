@@ -6,3 +6,6 @@
 *.pyc
 *.cid
 *.csv*
+/savedSets/
+/classResults/
+*.token
