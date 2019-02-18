@@ -186,8 +186,15 @@ class MyPrompt(Cmd):
 
         import csv
 
+        # Create csv target directory if non-existent
+        try:
+            os.mkdir(self.resultLocation)
+            print("CSV Directory ", self.resultLocation, " Created.")
+        except FileExistsError:
+            pass
+
         #write best features
-        with open(self.resultLocation+expName+"_best_features.csv", 'w') as csvfile:
+        with open(self.resultLocation+expName+"_best_features.csv", 'w+') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
             
@@ -200,7 +207,7 @@ class MyPrompt(Cmd):
         print(cm)
 
         #write confusion matrix
-        with open(self.resultLocation+expName+"CM.csv", 'w') as csvfile:
+        with open(self.resultLocation+expName+"CM.csv", 'w+') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
             for row in cm:
@@ -213,7 +220,7 @@ class MyPrompt(Cmd):
         print(classification_report(expected, predictions))
         #write classification report
 
-        with open(self.resultLocation+expName+"_report.csv", 'w') as reportFile:
+        with open(self.resultLocation+expName+"_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)
 
             oneSample = list(classReport.items())[0]
