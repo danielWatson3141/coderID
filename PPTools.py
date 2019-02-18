@@ -53,7 +53,7 @@ class Config:
 
 
     @staticmethod
-    def get(key, subkey):
+    def cast_value(value):
         """
         Gets the value in the configuration at (key, subkey), casts it to the
             correct type, and returns it
@@ -61,10 +61,10 @@ class Config:
         :param subkey: the key within the section whose value is wanted
         :return: Any type. Depends on the value in the string.
         """
-        val = Config.config[key][subkey].strip()
+        val = value.strip()
 
         # integers
-        if val.numeric():
+        if val.isnumeric():
             return int(val)
 
         # booleans
@@ -73,13 +73,19 @@ class Config:
             return val == bool_vals[0]
 
         # fractions
-        parts = val.split("/")
+        parts = [i.strip() for i in val.split("/")]
         if len(parts) == 2 and all(i.isdigit() for i in parts):
-            return parts[0] / parts[1]
+            return int(parts[0]) / int(parts[1])
 
         # all other data types
-        return(literal_eval(val))
+        try: # except strings
+            return literal_eval(val)
+        except: # strings
+            return val
 
+    @staticmethod
+    def get_value(key, subkey):
+        return Config.cast_value(Config.config[key][subkey])
 
 class PreProcessor:
 
@@ -97,8 +103,7 @@ class Tokenize:
 
     #TODO: Make linux-worthy
     if platform.system() == 'Darwin' and not cindex.Config.loaded:
-       cindex.Config.set_library_file(
-            '/usr/local/Cellar/llvm/7.0.1/lib/libclang.dylib')
+       cindex.Config.set_library_file(Config.config['Clang']['library_file'])
 
 
     @staticmethod

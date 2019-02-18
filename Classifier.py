@@ -1,3 +1,4 @@
+import PPTools
 from collections import defaultdict
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
@@ -6,54 +7,34 @@ from sklearn.svm import LinearSVC
 
 class Classifier:
 
-    def __init__(self, model_name):
+    def __init__(self):
         """
         :param model_name: String. the type of model that this classifier is.
             Must be one of "random_forest", "logit", "linear_svm", "naive_bayes".
         :return: a Classifier object.
         """
-        # TODO: add a param_dict parameter here?
-        self.model_name = model_name
+        self.model_name = PPTools.Config.config['Model']['model_name']
+        self.train_size = PPTools.Config.get_value('Model', 'train_size')
 
-        if model_name == "random_forest":
-            self.parameters = {
-                "n_estimators": 10,
-                "oob_score": True,
-                "max_features": "sqrt"
-            }
+        self.parameters = defaultdict()
+        for k, v in PPTools.Config.config.items(self.model_name):
+            self.parameters[k] = PPTools.Config.cast_value(v)
+
+        if self.model_name == "random_forest":
             self.model = RandomForestClassifier(**self.parameters)
 
-        elif model_name == "logit":
-            self.parameters = {
-                "penalty": "l2",
-                "solver": "saga", # check if other methods may be better
-                "multi_class": "multinomial",
-                # NOTE: Set a random_state value when solver == ‘sag’ or ‘liblinear’.
-                # TODO: add check for the above.
-                "random_state": None
-            }
+        elif self.model_name == "logit":
             self.model = LogisticRegression(**self.parameters)
 
-        elif model_name == "linear_svm":
-            self.parameters = {
-                "penalty": "l2",
-                "loss": "squared_hinge",
-                # TODO: From docs: "Prefer dual=False when n_samples > n_features." Account for this later
-                "dual": True,
-                "random_state": None,
-                "tol": 1e-4
-            }
+        elif self.model_name == "linear_svm":
             self.model = LinearSVC(**self.parameters)
 
-        elif model_name == "naive_bayes":
-            self.parameters = {}
+        elif self.model_name == "naive_bayes":
             self.model = MultinomialNB(**self.parameters)
 
         else:
             assert(True, "Invalid model choice. Parameter model_name must be one " \
                          "of 'random_forest', 'logit', 'svm', or 'naive_bayes'.")
-
-        self.parameters = defaultdict(None, self.parameters)
 
 
     def preprocess(self, X):
@@ -72,5 +53,7 @@ class Classifier:
         """
         for param_name, value in param_dict.items():
             self.parameters[param_name] = value
+            PPTools.Config.update(self.model_name, param_name, value)
+
         self.model.set_params(**self.parameters)
 
