@@ -1,5 +1,7 @@
+from ast import literal_eval
 import os.path
 import platform
+import configparser
 from clang import cindex
 
 def is_number(s):
@@ -17,6 +19,67 @@ def is_number(s):
         pass
 
     return False    
+
+
+class Config:
+    # stores the loaded config for easy access in any other module
+    config_path = 'config.ini'
+    config = configparser.ConfigParser()
+    config.read(config_path)
+
+    @staticmethod
+    def view():
+        # prints the contents of the current configuration
+        pass
+
+    @staticmethod
+    def update(key, subkey, value):
+        # TODO: Make the input a dictionary of {keys: value}? Would have to loop over items, but only write to ini once
+        # TODO: alternatively, add a save parameter that determines whether to write to file or not
+        """
+        Updates the both the current config parser and the config file.
+        :param keys: the list of nested keys that make up the compound key that we
+            want to update, e.g. for config['Model']['model_name'], use keys =
+            ['Model', 'model_name']. Note that the keys are not case-sensitive.
+        :param value: the new value to map to the compound key.
+        :param default_value: the value to use if the key to update doesn't exist
+        :return: None. Updates the config in-place.
+        """
+        if key not in Config.config: # section doesn't exist
+            Config.config.add_section(key)
+        Config.config.set(key, option = subkey, value = value) # mutating the parser values
+        with open(Config.config_path, 'w') as configfile:      # writing to file
+            Config.config.write(configfile)
+
+
+    @staticmethod
+    def get(key, subkey):
+        """
+        Gets the value in the configuration at (key, subkey), casts it to the
+            correct type, and returns it
+        :param key: the section in the config
+        :param subkey: the key within the section whose value is wanted
+        :return: Any type. Depends on the value in the string.
+        """
+        val = Config.config[key][subkey].strip()
+
+        # integers
+        if val.numeric():
+            return int(val)
+
+        # booleans
+        bool_vals = ('True', 'False')
+        if val in bool_vals:
+            return val == bool_vals[0]
+
+        # fractions
+        parts = val.split("/")
+        if len(parts) == 2 and all(i.isdigit() for i in parts):
+            return parts[0] / parts[1]
+
+        # all other data types
+        return(literal_eval(val))
+
 
 class PreProcessor:
 

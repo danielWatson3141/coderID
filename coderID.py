@@ -13,7 +13,8 @@ import zipfile
 import string
 import gitProfileSet
 import ProfileSet
-from sklearn.ensemble import RandomForestClassifier
+import Classifier
+#from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score,ShuffleSplit
 from sklearn import metrics, utils
 from sklearn.metrics import classification_report
@@ -111,24 +112,25 @@ class MyPrompt(Cmd):
 
         print("Generating CM")
         n_samples = len(self.gitProfileSet.target)
-        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
-        
+        #clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
+        clf = Classifier.Classifier("random_forest")
+        clf.set_parameters({"n_estimators": n_est})
+
         #shuffle the dataset
         features, targets = utils.shuffle(self.gitProfileSet.counts, self.gitProfileSet.target)
         
         #fit the model to the first 2/3 of the samples
-        clf.fit(features[:(n_samples//3)*2], targets[:(n_samples//3)*2])
+        clf.model.fit(features[:(n_samples//3)*2], targets[:(n_samples//3)*2])
         
         #predict the last 1/3 of the data
-        predictions = clf.predict(features[(n_samples//3)*2:])
+        predictions = clf.model.predict(features[(n_samples//3)*2:])
         expected = targets[(n_samples//3)*2:]
         
         #Compute OOB score
-        print("OOB score: "+str(clf.oob_score_))
-        
+        print("OOB score: "+str(clf.model.oob_score_))
         
         #Compute best 50 features
-        best = self.bestNFeatures(clf.feature_importances_, self.gitProfileSet.terms, 50)
+        best = self.bestNFeatures(clf.model.feature_importances_, self.gitProfileSet.terms, 50)
 
         import csv
 
@@ -175,9 +177,11 @@ class MyPrompt(Cmd):
     def crossValidate(self, features, targets, n_est):
         """Cross validate over the given data and return the scores"""
         print("Cross Validating...")
-        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
+        #clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
+        clf = Classifier.Classifier("random_forest")
+        clf.set_parameters({"n_estimators": n_est})
         cv = ShuffleSplit(n_splits=5, train_size=.2, test_size=.2)
-        scores = cross_val_score(clf, features, targets, cv=cv)
+        scores = cross_val_score(clf.model, features, targets, cv=cv)
         return(scores)
         
 
@@ -268,7 +272,6 @@ class MyPrompt(Cmd):
             args = args.split(":")
             
             author = self.gitProfileSet.authors.get(args[0])
-            
 
             args = args[1].strip().split(" ")
 
