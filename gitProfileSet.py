@@ -27,11 +27,14 @@ class gitProfileSet:
     #TODO: Make sibling class of ProfileSet
     
     langList =["cpp", "c"]
-    def __init__(self):
+    def __init__(self, name):
         """Initialize a new gitset"""
+        self.name = name
         self.repos = []
         self.authors = dict()
         self.featuresDetected = False
+        self.featuresSelected = None
+        self.termsSelected = None
         self.minedRepos = set()
 
     def addRepo(self, args):
@@ -41,62 +44,13 @@ class gitProfileSet:
                 self.repos.append(args)
         except Exception:
             print("Couldn't get that one...")
-        #self.compileAuthors(newRepo)
-
-            
-    @staticmethod
-    def processCommits(commitQ, infoQ, bm):
-
-        while True:
-            if commitQ.empty():
-                time.sleep(.1)
-                continue
-            
-            repo, commit = commitQ.get()
-
-            if commit == "DONE":
-                commitQ.put((repo, commit))
-                break
-            
-            info = bm.gitInfo(repo, commit)
-            infoQ.put(info)
-    
-    @staticmethod
-    def mineRepo(repo, queue):
-        """Mine repos for relevant commits. Populates queue."""
-        miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
-        print("Scanning repo: "+miner._path_to_repo)
-        commitList = miner.traverse_commits()
-        
-        tipeCounts = dict()
-        for commit in commitList:
-            tipe = commitType.categorize(commit)
-
-            if tipe not in tipeCounts:
-                tipeCounts.update({tipe: 0})
-            count = tipeCounts.get(tipe)
-            tipeCounts.update({tipe: count+1})
-
-
-            if tipe is commitType.FEATURE:
-                comm = (repo, commit.hash)
-                queue.put(comm)
-            
-        print(str("finished"+str(miner._path_to_repo)))
-        print("types: "+str(tipeCounts))
-    
+        #self.compileAuthors(newRepo)    
           
     #TODO: take args from cli
     def compileAuthors(self, minAuth = 25, minDocs = 9):
         import sys
         platform = sys.platform
-        # This is disabled for now. Probably permanently
-        if platform is None: #or platform is "darwin":
-            print("Doing work in parellel")
-            self.compileInParellel()
-        else:
-            print("Doing work in sequence")
-            self.compileInSequence(minAuth, minDocs)
+        self.compileInSequence(minAuth, minDocs)
 
     def compileInSequence(self, minAuthors, minDocs):
         
@@ -163,7 +117,7 @@ class gitProfileSet:
                                 while(leDiff["added"][lineIndex][0]<fun.start_line):
                                     lineIndex+=1
                             
-                                while(leDiff["added"][lineIndex][0]<fun.end_line):
+                                while(leDiff["added"][lineIndex][0]<fun.end_line+1):
                                     newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):leDiff["added"][lineIndex][1]})
                                     lineIndex+=1
                             except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
@@ -182,125 +136,12 @@ class gitProfileSet:
 
 
 
-
-    def compileInParellel(self):
-        print("Gathering Author data...")
-        
-        startTime = time.time()
-
-        #time.sleep(10)
-        m = multiprocessing.Manager()
-        
-        multiprocessing.managers.BaseManager.register('gitInfo', gitInfo) #register gitAuthor to synchronize it
-        
-        bm = multiprocessing.managers.BaseManager() #to create author objects
-
-        bm.start()
-
-        #authorDict = m.dict()           #make thread managed dict
-
-
-        #----------------Set up consumer process
-        producerWorkers = 2
-        consumerWorkers = 4     #How many processes should consume commits
-
-        producerQ = queue.Queue()        #use regular queue here
-        consumerQ = queue.Queue()
-        repoQ = queue.Queue()
-        
-        for repo in self.repos:
-            repoQ.put(repo)
-
-        commitQ = m.Queue()
-        infoQ = m.Queue()
-        
-        for i in range(1,consumerWorkers):
-            newP = multiprocessing.Process(target=gitProfileSet.processCommits, 
-                           args=(commitQ, infoQ, bm))
-            newP.start()
-            consumerQ.put(newP)
-
-            if i <= producerWorkers:
-                nextRepo = repoQ.get()
-                newP = multiprocessing.Process(target=gitProfileSet.mineRepo, 
-                    args=(nextRepo, commitQ))
-                newP.start()
-                producerQ.put(newP)
-            
-
-
-
-        print("Consumers Started")      
-        prodDone = False
-        conDone = False
-        verbosity = 25
-        cur = 0
-        finished = 0
-        while True:
-            
-            
-            if cur == verbosity:
-                print("CommitQ: "+str(commitQ.qsize()))
-                print("InfoQ: "+str(infoQ.qsize()))
-                cur = 0
-                if prodDone:
-                    remaining = commitQ.qsize() + infoQ.qsize()
-                    elapsedTime = time.time() - startTime
-                    rate = finished / elapsedTime
-                    remainingTime = remaining / rate
-                    print("Est. time remaining: "+str(remainingTime/60)+" minutes.")
-
-            else:
-                cur+=1
-
-            if not producerQ.empty():     #cycle through the processes,
-                process = producerQ.get()
-                if process.is_alive():       #If alive, keep in the queue
-                    producerQ.put(process)
-                elif not repoQ.empty():
-                    nextRepo = repoQ.get()
-                    newP = multiprocessing.Process(target=gitProfileSet.mineRepo, 
-                           args=(nextRepo, commitQ))
-                    newP.start()
-                    producerQ.put(newP)
-                
-            elif not prodDone:
-                print("Producers done.")
-                commitQ.put(("DONE","DONE"))   #Do this to signal no more commits to the consumer
-                prodDone = True
-
-            if not consumerQ.empty():
-                process = consumerQ.get()
-                if process.is_alive():
-                    consumerQ.put(process)
-            elif not conDone:
-                print("Consumers done.")
-                conDone = True
-
-            if infoQ.empty():
-                if conDone and prodDone:
-                    break
-                else:
-                     time.sleep(.1) #wait a bit
-            else:
-                info = infoQ.get()
-                if info.getauthorName() not in self.authors:
-                    self.authors.update({info.getauthorName():gitAuthor(info.getDev())})
-                author = self.authors.get(info.getauthorName())
-                author.updateFromCommitInfo(info)
-                finished += 1
-
-        print("Shutting down manager.")
-        bm.shutdown()                   #Close now that work is done
-        self.displayAuthors()
-        return
-
     def displayAuthors(self):
         for value in self.authors.values():
             print(value)
 
 
-    def getFeatures(self, numAuthors):
+    def getFeatures(self, numAuthors=-1):
         inputs=[]
         node_types = []
         code_unigrams = []
@@ -312,7 +153,7 @@ class gitProfileSet:
 
         print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
-        for author in self.authors.values():
+        for author in tqdm(self.authors.values()):
             if numAuthors != -1 and authors_seen == numAuthors:
                     break
             authors_seen += 1
@@ -329,13 +170,16 @@ class gitProfileSet:
                     tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
                     inputs.append(PPTools.Tokenize.tokensToText(tokens))  # Convert to text
 
-                    tree = ASTFeatureExtractor.AST(tu.cursor)
-                    tree.traverse()
+                    #Reset tu Brute?
+                    #tu = PPTools.Tokenize.get_tu(fn_str)
+                    
+                    #tree = ASTFeatureExtractor.AST(tu.cursor)
+                    #tree.traverse()
 
                     # TODO: concatenate in the featureExtractor module or here?
-                    node_types.append(" ".join(tree.node_types))
-                    code_unigrams.append(" ".join(tree.code_unigrams))
-                    del tree
+                    #node_types.append(" ".join(tree.node_types))
+                    #code_unigrams.append(" ".join(tree.code_unigrams))
+                    #del tree
 
                 except Exception:
                     continue
@@ -353,10 +197,10 @@ class gitProfileSet:
 
 
                 # Token-level features
-                if tokFeatures is None:
-                    tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
-                else:
-                    tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
+                # if tokFeatures is None:
+                #     tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
+                # else:
+                #     tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
 
                 self.target.append(author.name)
                 del tokens
@@ -365,6 +209,16 @@ class gitProfileSet:
 
         # TODO: abstract this out since it gets used a lot.
         print("Vectorizing...")
+        
+
+        #unigramTFIDF = vectorizer.fit_transform(tqdm(inputs))
+        #uniNames = vectorizer.get_feature_names()
+
+        #self.counts = hstack([unigramTFIDF, charLevelFeatures, tokFeatures], format = 'csr')
+        #self.terms = uniNames+charfeatureNames + tokfeatureNames
+
+        # The full feature set
+
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
                                        decode_error="ignore", lowercase=False)
         vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S*",
@@ -372,53 +226,142 @@ class gitProfileSet:
                                         use_idf=False)
 
         self.counts = hstack([charLevelFeatures, tokFeatures], format = 'csr')
-        self.terms = charfeatureNames + tokfeatureNames
+        self.terms = charfeatureNames #+ tokfeatureNames
 
-        # The full feature set
         need_tf = False
 
-        i = 0
-        for features in [inputs, node_types, code_unigrams]:
-            i += 1
+        #i = 0
+        #for features in tqdm([inputs, node_types, code_unigrams]):
+        #    i += 1
             # TFIDF
-            self.counts = hstack([self.counts, vectorizer.fit_transform(features)],
+        self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
                                  format = 'csr')
-            self.terms += vectorizer.get_feature_names()
+        self.terms += vectorizer.get_feature_names()
 
             # Get only the term frequencies
-            if need_tf:
-                self.counts = hstack([self.counts, vectorizer_tf.fit_transform(features)],
-                                     format = 'csr')
-                self.terms += vectorizer_tf.get_feature_names()
-            else:
-                # accounts for the fact that we do not need the TF of the unigrams/inputs
-                need_tf = True
+        # if need_tf:
+        #     self.counts = hstack([self.counts, vectorizer_tf.fit_transform(features)],
+        #                             format = 'csr')
+        #     self.terms += vectorizer_tf.get_feature_names()
+        # else:
+        #     # accounts for the fact that we do not need the TF of the unigrams/inputs
+        #     need_tf = True
 
         del inputs, node_types, code_unigrams
 
         self.target = np.array(self.target)
 
+        self.featuresDetected = True
+            #should fit feature detector here
+            #then pass it down
+
+    def featureSelect(self, reductionFactor = .5):
         # First round feature selection using mutual information
+
+        if self.featuresSelected is not None:
+            print("Features selected already, skipping.")
+        
+
         total_num_features = self.counts.shape[1]
         print("Number of features before selection: {}".format(total_num_features))
 
-        feature_mi = mutual_info_classif(self.counts, self.target)
-        print("Selecting features via mutual information....")
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn import feature_selection
+        import heapq
+        
+        #featureSets = dict() #keep track of sets and feature importances
+        #format: key=n_features value = (strength, features, importances)
 
-        relevantIndeces = np.where(np.array(feature_mi) > .01)[0]
-        self.counts = self.counts[:,relevantIndeces]
-        self.terms = [self.terms[i] for i in relevantIndeces]
+        clf = RandomForestClassifier(n_estimators=300, oob_score=True, max_features="sqrt")
+        
+        #train with all features to start
 
-        n_relevant_features = len(relevantIndeces)
+        previous = 0
+        strength = .01
+        
+        #entry = {total_num_features:(strength, self.counts, importances)}  #make first entry
+        
+        nFeatures = total_num_features
+        features = self.counts
+        terms = self.terms
+        
+        previousFeatures = None
+        previousTerms = None
+
+        #choose optimal feature set size
+        while strength > previous:
+            previous = strength
+            
+            strength, importances = self.evaluate(clf, features, self.target)
+            print((nFeatures, strength))
+
+            from operator import itemgetter
+            match = zip(range(0, nFeatures), importances)            
+            
+            nFeatures = int(reductionFactor*nFeatures)
+            
+            previousFeatures = features
+            previousTerms = terms
+
+            best = list(map(lambda x: x[0], heapq.nlargest(nFeatures, match, key = itemgetter(1))))
+
+            features = features[:,best]
+            terms = [terms[i] for i in best]
+
+        self.featuresSelected = previousFeatures
+        self.termsSelected = previousTerms               
+        
+        #selector = RFECV(clf, cv=cv, step = int(total_num_features/10), min_features_to_select=1000, verbose = 3, n_jobs=1)
+        #selector.fit(self.counts, self.target)
+
+        print("Features selected...")
+
+        #self.counts = features
+        #self.termsSelected = [self.terms[i] for i in self.selectedFeatures]
+
+        n_relevant_features = len(self.termsSelected)
 
         print("Number of features after selection: {}".format(n_relevant_features))
         frac_selected = 100 * n_relevant_features / total_num_features
         print("Percentage of features selected: {:.2f}%".format(frac_selected))
 
-        self.featuresDetected = True
-            #should fit feature detector here
-            #then pass it down
+    def evaluate(self, clf, features, targets, splits =3):
+        from sklearn.model_selection import cross_val_score, ShuffleSplit
+        numSamples = features.shape[0]
+        
+        trSize = int(min(1000 ,  numSamples* .5))
+        teSize = int(min(200 , numSamples* .2))
+        featureCount = features.shape[1]
+        cv = ShuffleSplit(n_splits=splits, train_size=trSize, test_size=teSize)
+        
+        
+        importances = np.zeros(featureCount)
+        strength = 0
+        for train, test in cv.split(features, targets):
 
+            trFeatures = features[train]
+            trTarget = targets[train]
+
+            teFeatures = features[test]
+            teTarget = targets[test]
+   
+            clf.fit(trFeatures, trTarget)
+
+            predictions = clf.predict(teFeatures)
+
+            stren = len(np.where(predictions == teTarget)[0])/teSize
+
+            strength += stren / splits
+            importances += clf.feature_importances_ / splits
+            
+
+        return (strength, importances)
+        
+
+    def plotLearningCurve(self, clf, features, targets):
+        """display performance as a function of feature set size"""
+
+        
     def functionToString(self, lines):
         textLines = list(len(lines))
 
@@ -428,14 +371,11 @@ class gitProfileSet:
 
         return "\n".join(textLines)
 
-    #TODO: Fix.
-    # def __str__(self, lines):
-    #      print(str(len(gps.authors))+" authors.")
+    
+    def __str__(self):
+         return (str(len(self.authors))+" authors. "+str(sum(map(lambda x: len(x.functions), self.authors.values())))+" functions in total.")
 
-    #     commits = 0
-    #     functions = 0
-    #     for author in
-    #     print(str(sum(map(lambda x: len(x.functions), gps.authors)))+" functions in total.")
+        
         
 
 class gitAuthor:
@@ -450,19 +390,6 @@ class gitAuthor:
         self.lines = dict() #key: {commitHash,file.cpp,lineNumber} value: literal code
         self.repos = set()
     
-    #TODO: Do I still need this?
-    @classmethod
-    def fromProxy(thisClass, proxy):
-        toReturn = gitAuthor(None)
-        toReturn.name = proxy.getname()
-        toReturn.email = proxy.getemail()
-        toReturn.commits.update(proxy.getcommits())
-        toReturn.files.union(proxy.getfiles())
-        toReturn.lines.update(proxy.getlines())
-        toReturn.repos.update(proxy.getrepos())
-        return toReturn
-        #self.LOC = 0
-
     def updateFromCommitInfo(self, info):
         self.commits.update({info.gethash(): info.getrepo()})
         self.files.union(info.getfiles())

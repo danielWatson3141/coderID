@@ -1,3 +1,11 @@
+About
+------
+This is a Python tool that provides a python module and command-line interface for source-code stylometry.
+
+This tool is under active development and is neither properly documented, nor entirely functional at this stage. We have attempted to document commands and functions in-line, but as the system is rapidly evolving, not all functionality is documented properly and not all components will work as intended.
+
+
+
 Setup
 -------
 

@@ -8,24 +8,25 @@ from numpy import ndarray
 
 class ProfileSet:
     
-    def __init__(self, file, lang="cpp", config=None):
-        self.fileSource = file
+    def __init__(self, name, lang="cpp", config=None):
+        self.name = name
         self.cfg = config
         self.language = lang
         self.fileCount = 0
         self.docs = []
         self.authors = dict()
         self.featureDetected=False
+        
 
     def addAuthorsDir(self, topDir):
         preFileCount = self.fileCount
 
-        dirs = ProfileSet.listdir_fullpath(topDir)
+        dirs = listdir_fullpath(topDir)
         for dir in dirs:
             try:
                 self.addAuthor(dir)
             except TypeError:
-                dirs.extend(ProfileSet.listdir_fullpath(dir))
+                dirs.extend(listdir_fullpath(dir))
 
         print("Added "+str(self.fileCount-preFileCount)+" files from "+str(len(dirs))+" authors.")
 
@@ -56,10 +57,7 @@ class ProfileSet:
 
 
 
-    @staticmethod
-    def listdir_fullpath(d):
-        return [os.path.join(d, f) for f in os.listdir(d)]
-
+    
     def merge(self, otherPS):
         old = self.authors
         new = otherPS.authors
@@ -116,6 +114,10 @@ class ProfileSet:
             #should fit feature detector here
             #then pass it down
 
+@staticmethod
+def listdir_fullpath(d):
+    return [os.path.join(d, f) for f in os.listdir(d)]
+
 class Author:
     def __init__(self, dir, cfg=None, lang="cpp"):
         self.authName = os.path.basename(dir)
@@ -155,7 +157,7 @@ class Author:
         newdocs = []
         try:
             for filePath in self.docs:
-                fileset = ProfileSet.listdir_fullpath(os.path.dirname(filePath))
+                fileset = listdir_fullpath(os.path.dirname(filePath))
                 if len(fileset) <= 1:
                     newdocs.append(filePath)
                     continue
