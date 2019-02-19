@@ -66,7 +66,7 @@ class gitProfileSet:
                 
                 if authors is not None and author not in authors:
                     continue
-                tipe = commitType.categorize(commit, langList=langList)
+                tipe = commitType.categorize(commit, langList=gitProfileSet.langList)
 
                 if tipe not in tipeCounts:
                     tipeCounts.update({tipe: 0})
@@ -446,7 +446,8 @@ class commitType(Enum):
         added = 0
         removed = 0
         for mod in commit.modifications:
-            if mod.new_path is None or (langList is not None and mod.new_path.split(".")[-1] not in langList):
+            #if mod.new_path is None or (langList is not None and mod.new_path.split(".")[-1] not in langList):
+            if mod.new_path is None or (mod.new_path.split(".")[-1] not in langList):
                 continue
             #mod._calculate_metrics()
             added += mod.added
