@@ -2,7 +2,7 @@ import os
 import re
 import time
 import queue
-
+import github
 import PPTools
 import ASTFeatureExtractor
 import pydriller
@@ -45,26 +45,15 @@ class gitProfileSet:
         except Exception:
             print("Couldn't get that one...")
         #self.compileAuthors(newRepo)    
-          
-    #TODO: take args from cli
-    def compileAuthors(self, minAuth = 25, minDocs = 9):
-        import sys
-        platform = sys.platform
-        self.compileInSequence(minAuth, minDocs)
+    
 
-    def compileInSequence(self, minAuthors, minDocs):
-        
-        authorsWithEnoughDocs = 0
-        for author in self.authors:
-            if len(author.functions) > minDocs:
-                authorsWithEnoughDocs += 1
-
+    
+    def compileAuthors(self, authors = None):
+        """Mine all repos in the repo list for commits by those in authors. None for get all"""
         for repo in self.repos:
-            if authorsWithEnoughDocs >= minAuthors:
-                return
             if repo in self.minedRepos:
                 continue
-            else:
+            elif authors is not None:
                 self.minedRepos.add(repo)
             miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
             repository = pydriller.GitRepository(repo)
@@ -73,6 +62,10 @@ class gitProfileSet:
             tipeCounts = dict()
 
             for commit in tqdm(miner.traverse_commits()):
+                author = commit.author
+                
+                if authors is not None and author not in authors:
+                    continue
                 tipe = commitType.categorize(commit)
 
                 if tipe not in tipeCounts:
@@ -82,7 +75,6 @@ class gitProfileSet:
 
 
                 if tipe is commitType.FEATURE:
-                    author = commit.author
                     if author.name not in self.authors:
                         self.authors.update({author.name:gitAuthor(author)})
                         #print("Found new author: "+author.name)
@@ -123,10 +115,7 @@ class gitProfileSet:
                             except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
                                 pass
                             if len(newFun) > 1:
-                                author.functions.append(newFun)
-                                if len(author.functions) == minDocs:
-                                    authorsWithEnoughDocs += 1
-                                    
+                                author.functions.append(newFun)    
 
                     
                     
@@ -259,9 +248,6 @@ class gitProfileSet:
         from sklearn import feature_selection
         import heapq
         
-        #featureSets = dict() #keep track of sets and feature importances
-        #format: key=n_features value = (strength, features, importances)
-
         clf = RandomForestClassifier(n_estimators=300, oob_score=True, max_features="sqrt")
         
         #train with all features to start
@@ -269,7 +255,6 @@ class gitProfileSet:
         previous = 0
         strength = .01
         
-        #entry = {total_num_features:(strength, self.counts, importances)}  #make first entry
         
         nFeatures = total_num_features
         features = self.counts
@@ -279,12 +264,13 @@ class gitProfileSet:
         previousTerms = None
 
         #choose optimal feature set size
-        while strength > previous:
+        while True:
             previous = strength
             
             strength, importances = self.evaluate(clf, features, self.target)
             print((nFeatures, strength))
-
+            if strength < previous:
+                break
             from operator import itemgetter
             match = zip(range(0, nFeatures), importances)            
             
@@ -301,13 +287,7 @@ class gitProfileSet:
         self.featuresSelected = previousFeatures
         self.termsSelected = previousTerms               
         
-        #selector = RFECV(clf, cv=cv, step = int(total_num_features/10), min_features_to_select=1000, verbose = 3, n_jobs=1)
-        #selector.fit(self.counts, self.target)
-
         print("Features selected...")
-
-        #self.counts = features
-        #self.termsSelected = [self.terms[i] for i in self.selectedFeatures]
 
         n_relevant_features = len(self.termsSelected)
 
@@ -315,7 +295,8 @@ class gitProfileSet:
         frac_selected = 100 * n_relevant_features / total_num_features
         print("Percentage of features selected: {:.2f}%".format(frac_selected))
 
-    def evaluate(self, clf, features, targets, splits =3):
+    @staticmethod
+    def evaluate(clf, features, targets, splits =3):
         from sklearn.model_selection import cross_val_score, ShuffleSplit
         numSamples = features.shape[0]
         
@@ -346,11 +327,17 @@ class gitProfileSet:
             
 
         return (strength, importances)
-        
 
-    def plotLearningCurve(self, clf, features, targets):
-        """display performance as a function of feature set size"""
+    def testProgrammerTransparency (self, authors = None):
+        results = dict()
+        #{name: (pr, re, f1)}
+        if authors == None:
+            authors = [author.name for author in self.authors]
 
+        for author in authors:
+            results.update({author: 0})
+
+        return results
         
     def functionToString(self, lines):
         textLines = list(len(lines))
@@ -366,8 +353,6 @@ class gitProfileSet:
          return (str(len(self.authors))+" authors. "+str(sum(map(lambda x: len(x.functions), self.authors.values())))+" functions in total.")
 
         
-        
-
 class gitAuthor:
 
     def __init__(self, dev):
@@ -391,6 +376,44 @@ class gitAuthor:
     def __str__(self):
         return self.name+": "+str(len(self.commits))+" commits. "+str(len(self.lines))+" LOC, "+str(len(self.functions))+" complete functions from "+str(len(self.repos))+ " repos."
     
+    def getRepos(self, skip=None):
+        """Get all repos associated with a given author, except for those in skip"""
+        with open(os.getcwd()+"/github.token", 'r') as file:
+            g = github.MainClass.Github(file.readline)
+
+        users = g.search_users(self.email+" in:email")
+
+        if len(users) == 0:
+            print("No matching gh user for author "+self.name)
+            return []
+        
+        if len(users) > 1:
+            print("Multiple gh users matching author "+self.name)
+        
+        repoList = []
+        for user in users:
+            for repo in user.get_repos():
+                if repo.language in gitProfileSet.langList and (not skip or repo not in self.repos):
+                    repoList.append(repo)
+
+        return repoList
+
+    def getGPSofSelf(self, skipGiven = True, mine = False):
+        """Generates a GPS of all repos this author has contributed, skipping existing repos by default."""
+
+        repos = self.getRepos(skip=skipGiven)
+        gps = gitProfileSet(self.name)
+
+        print("fetching repos...")
+        for repo in tqdm(repos):
+            if repo not in self.repos:
+                gps.addRepo(repo)
+
+        if mine:
+            gps.compileAuthors()   
+
+        return gps
+
 from enum import Enum     
 class commitType(Enum):
     FEATURE = "FC"

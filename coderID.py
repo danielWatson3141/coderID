@@ -1,10 +1,8 @@
 
 import sys
 import warnings
-
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
-
 from cmd import Cmd
 import sys
 import pickle
@@ -13,13 +11,14 @@ import zipfile
 import string
 import gitProfileSet
 import ProfileSet
+import copy
+import numpy as np
+import csv
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import cross_val_score,ShuffleSplit
+from sklearn.model_selection import cross_val_score,ShuffleSplit, StratifiedKFold
 from sklearn import metrics, utils
 from sklearn.metrics import classification_report
-import numpy as np
 
-import csv
 
 
 from tqdm import tqdm
@@ -72,31 +71,54 @@ class MyPrompt(Cmd):
             newName = filepath 
 
         self.activegps.name = newName
-        
-        file = open(os.getcwd()+"/savedSets/"+newName, 'wb')
-        pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
-        import copy
-        pickler.dump(copy.deepcopy(self.activegps))
+        self.save(self.activegps)
         if newName not in self.gpsList:
             self.gpsList.append(newName)
         
         print("Saved to "+newName)
 
+    @staticmethod
+    def save(gps):
+        file = open(os.getcwd()+"/savedSets/"+gps.name, 'wb')
+        pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
+        pickler.dump(copy.deepcopy(gps))
+        
     def do_load(self, args):
         """Switches currently active gps to one with given name. ***PROLLY SHOULD SAVE FIRST***"""
         if(args == ""):
             print("Error, must supply name of existing gps. Use 'new' to start a fresh one.")
+        self.activegps = self.load(args)
+        self.prompt = self.activegps.name
+
+    def load(self, gpsName):
         for gpsFile in self.gpsList:
             path, extension = os.path.splitext(gpsFile)
             fileName = path.split("/")[-1]
-            if args == fileName:
-                self.activegps = self.loadGPSFromFile(args)
-                self.prompt = self.activegps.name+">"
-                break
+            if gpsName == fileName:
+                return(self.loadGPSFromFile(gpsName))
 
     def loadGPSFromFile(self, fileName):
         file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
         return pickle.Unpickler(file).load() 
+
+    def do_getGPSForAuthor(self, args):
+
+        try:
+            author = self.activegps.authors[args] 
+        except Exception:
+            print("Author not found")
+
+        self.save(author.getGPSofSelf())
+
+    def do_getGPSForEmail(self, args):
+        dev = object()
+        dev.name = args.split("@")[0]
+        dev.email = args
+
+        tempAuthor = gitProfileSet.gitAuthor(dev)
+        return tempAuthor.getGPSofSelf()
+           
+
     
     def do_ls(self, args):
         """List all available profile sets"""
@@ -275,8 +297,84 @@ class MyPrompt(Cmd):
 
                 if confidence > decisionPoint:
                     print("Match: "+ prediction+", "+target+", "+confidence)
-                
-                
+    
+    def do_authorAuthTest(self, args):
+        """Find precision and recall for given author in 2 class test"""
+        if args == "":
+            print("Needs an author parameter")
+
+        print(self.twoClassTest(args))
+
+    def do_allAuthTest(self, args, mindocs = 30):
+        output = dict()
+        for authorName, author in tqdm(self.activegps.authors.items()):
+            if len(author.functions) > mindocs:
+                result = self.twoClassTest(authorName, dictOutput=True)
+                precision = result[authorName]["precision"]
+                recall = result[authorName]["recall"]
+                output.update({authorName:(precision, recall)})
+
+        for result in output.items():
+            print(result)
+
+    def twoClassTest(self, author, splits = 5, dictOutput=False):
+        
+        if author not in self.activegps.authors:
+            print("Author not found")
+            return
+        gps = self.activegps
+        if not gps.featuresDetected:
+            print("Running Feature Detection")
+            gps.getFeatures()
+        
+        features = copy.deepcopy(gps.counts)
+        targets = copy.deepcopy(gps.target)
+
+        
+        authorCount = 0
+        notCount = 0
+        for i in range(1, len(targets)):
+            if not targets[i] == author:
+                targets[i] = "not_"+author
+                notCount += 1
+            else:
+                authorCount += 1
+
+
+        clf = RandomForestClassifier(n_estimators=600, oob_score=True, max_features="sqrt", class_weight={author:5, "not_"+author:1})
+        
+        #cross validate for prec and rec
+
+        cv = StratifiedKFold(n_splits=splits, shuffle=True)
+        pred = []
+        tar = []
+        #print("Cross Validating")
+        for train, test in cv.split(features, targets):
+
+            trFeatures = features[train]
+            trTarget = targets[train]
+
+            teFeatures = features[test]
+            teTarget = targets[test]
+   
+            clf.fit(trFeatures, trTarget)
+
+            pred.extend(clf.predict(teFeatures))
+            tar.extend(teTarget)
+
+        return classification_report(pred, tar, output_dict=dictOutput)
+
+    def do_featureDetect(self, args):
+        self.activegps.getFeatures()
+        self.do_save()
+
+    def do_featureSelect(self, args):
+        if args is not '':
+            redF = float(args)
+        else:
+            redF = .7    
+        self.activegps.featureSelect(redF)
+        self.do_save()
     
     def decisionMaximizationProcedure(self, success:np.array, confidence:np.array, maxFP=.1, precision = .01):
         """return the highest d such that P(success| confidence > d) >= 1-maxFP"""
@@ -332,13 +430,13 @@ class MyPrompt(Cmd):
         test_size=min(200 ,  numSamples* .2)
         splits = 3
 
-        cv = ShuffleSplit(n_splits=splits, train_size=train_size, test_size=test_size)
+        cv = StratifiedKFold(n_splits=splits)
         
         success = np.empty((test_size*splits))
         confidence = np.empty((test_size*splits))
         index = 0
 
-        for train, test in cv.split(features):
+        for train, test in cv.split(np.zeros(len(targets)), targets):
             
             trainingSet = (features[train], targets[train]) #Select training set
 
@@ -371,6 +469,7 @@ class MyPrompt(Cmd):
                     print(file1+", "+file2+": "+str(inCommon))
 
 
+
     def authorsInCommon(self, gps1, gps2):
         return [author for author in gps1.authors.keys() if author in gps2.authors]
         
@@ -400,6 +499,7 @@ class MyPrompt(Cmd):
                     break
 
         self.activegps.authors = new
+        self.activegps.featuresDetected = False
 
     def do_new(self, args):
         """Re-initializes profile set to be empty"""
