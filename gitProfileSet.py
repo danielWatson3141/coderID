@@ -62,11 +62,15 @@ class gitProfileSet:
             tipeCounts = dict()
 
             for commit in tqdm(miner.traverse_commits()):
+<<<<<<< e565535885836dbf5d0c0a56f2a35caba9da035b
                 author = commit.author
                 
                 if authors is not None and author not in authors:
                     continue
                 tipe = commitType.categorize(commit)
+=======
+                tipe = commitType.categorize(commit, langList=langList)
+>>>>>>> Added testing for heuristics
 
                 if tipe not in tipeCounts:
                     tipeCounts.update({tipe: 0})
@@ -427,7 +431,7 @@ class gitAuthor:
 
         return gps
 
-from enum import Enum     
+from enum import Enum
 class commitType(Enum):
     FEATURE = "FC"
     BUGFIX = "BF"
@@ -439,14 +443,14 @@ class commitType(Enum):
     def describe(self):
         # self is the member here
         return self.name, self.value
-    
+
     #TODO: User better heuristic
     @staticmethod
-    def categorize(commit):
-        added= 0
-        removed =0
+    def categorize(commit, langList=None):
+        added = 0
+        removed = 0
         for mod in commit.modifications:
-            if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
+            if mod.new_path is None or (langList is not None and mod.new_path.split(".")[-1] not in langList):
                 continue
             #mod._calculate_metrics()
             added += mod.added
@@ -454,18 +458,15 @@ class commitType(Enum):
 
         if added == 0:
             return commitType.OTHER
-        
+
         if added-removed < .1*added:
             if added < 20:
                 return commitType.BUGFIX
             else:
-                return commitType.REFACTOR        
-        
+                return commitType.REFACTOR
+
         if added > 20:
             return commitType.FEATURE
 
         return commitType.OTHER
 
-
-
-        
