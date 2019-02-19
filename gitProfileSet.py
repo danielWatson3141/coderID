@@ -211,16 +211,6 @@ class gitProfileSet:
 
         # TODO: abstract this out since it gets used a lot.
         print("Vectorizing...")
-        
-
-        #unigramTFIDF = vectorizer.fit_transform(tqdm(inputs))
-        #uniNames = vectorizer.get_feature_names()
-
-        #self.counts = hstack([unigramTFIDF, charLevelFeatures, tokFeatures], format = 'csr')
-        #self.terms = uniNames+charfeatureNames + tokfeatureNames
-
-        # The full feature set
-
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
                                        decode_error="ignore", lowercase=False)
         vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S*",
@@ -401,17 +391,6 @@ class gitAuthor:
         self.lines = dict() #key: {commitHash,file.cpp,lineNumber} value: literal code
         self.repos = set()
     
-    def updateFromCommitInfo(self, info):
-        self.commits.update({info.gethash(): info.getrepo()})
-        self.files.union(info.getfiles())
-        self.lines.update(info.getlines())
-        self.functions.extend(info.getfuns())
-        self.repos.add(info.getrepo())
-
-    def tokenizeLines(self):
-        """tokenizes all code belonging to this author. Results are unpicklable so results should be disposed of after use."""
-        return PPTools.Tokenize.lines(self.lines)
-
     def merge(self, other):
         """merges the authors into one author object, keeping self.name"""
         print("Merging author: "+self.name)
@@ -422,69 +401,6 @@ class gitAuthor:
         
     def __str__(self):
         return self.name+": "+str(len(self.commits))+" commits. "+str(len(self.lines))+" LOC, "+str(len(self.functions))+" complete functions from "+str(len(self.repos))+ " repos."
-
-class gitInfo:
-    """Container class for extracted git info"""
-    
-    def __init__(self, repoPath, commit):
-        
-        repository = pydriller.GitRepository(repoPath)
-
-        self.repo = repoPath
-        self.hash = commit
-        self.files = list()
-        self.lines = dict()
-        self.funs = dict()
-
-        commit = repository.get_commit(commit)
-        self.author = commit.author
-        
-        
-        for mod in commit.modifications:
-            mod._calculate_metrics()
-            if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
-                continue
-            
-            self.files.append(mod.new_path)
-            #parse diff and add lines to list
-            
-            leDiff = repository.parse_diff(mod.diff)
-            for num, line in leDiff["added"]:
-                self.lines.update({(commit.hash,mod.new_path,num):line})
-
-            #extract functions with lizard
-            funs = mod._function_list
-
-            #maintain list of dicts containing the source code of specific functions. Same format as for lines
-            lineIndex = 0
-            for fun in funs:
-                newFun = dict()
-                try:
-                    while(leDiff["added"][lineIndex][0]<fun.start_line):
-                        lineIndex+=1
-                
-                    while(leDiff["added"][lineIndex][0]<fun.end_line):
-                        newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):leDiff["added"][lineIndex][1]})
-                        lineIndex+=1
-                except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
-                    pass
-                if len(newFun) > 0:
-                    self.funs.update(newFun)
-    #TODO: clean unnecessary getters
-    def getrepo(self):  
-        return self.repo
-    def gethash(self):  
-        return self.hash
-    def getDev(self):
-        return self.author
-    def getauthorName(self):  
-        return self.author.name
-    def getfiles(self):  
-        return self.files
-    def getlines(self):  
-        return self.lines
-    def getfuns(self):  
-        return self.funs
     
 from enum import Enum     
 class commitType(Enum):

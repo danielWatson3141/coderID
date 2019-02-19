@@ -424,7 +424,7 @@ class MyPrompt(Cmd):
         self.prompt = self.activegps.name+">"
              
     def do_loadGit(self, args):
-        """Loads a single git repo"""
+        """Loads a single git repo. Can be local or remote."""
         if args =="":
             print("Must enter a path to a git repo.")
         for filePath in args.split(" "):
@@ -596,7 +596,7 @@ class MyPrompt(Cmd):
         return sortedMatch[0:n]
 
     def do_gpsInfo(self, args):
-        """print basic info about this gps"""
+        """print basic info about thimining software repositories toolss gps"""
         print(self.activegps)
 
     
