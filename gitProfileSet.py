@@ -130,7 +130,9 @@ class gitProfileSet:
             print(value)
 
 
-    def getFeatures(self, numAuthors=-1):
+    def getFeatures(self):
+        numAuthors = PPTools.Config.get_value('Model', 'number_of_authors')
+
         inputs=[]
         node_types = []
         code_unigrams = []
@@ -234,7 +236,9 @@ class gitProfileSet:
             #should fit feature detector here
             #then pass it down
 
-    def featureSelect(self, reductionFactor = .5):
+    def featureSelect(self):
+        section = 'Feature Selection'
+        reductionFactor = PPTools.Config.get_value(section, 'reduction_factor')
         # First round feature selection using mutual information
 
         if self.featuresSelected is not None:
@@ -248,8 +252,14 @@ class gitProfileSet:
         from sklearn import feature_selection
         import heapq
         
-        clf = RandomForestClassifier(n_estimators=300, oob_score=True, max_features="sqrt")
-        
+        #featureSets = dict() #keep track of sets and feature importances
+        #format: key=n_features value = (strength, features, importances)
+
+        # clf = RandomForestClassifier(n_estimators=300, oob_score=True, max_features="sqrt")
+        clf = RandomForestClassifier(n_estimators=PPTools.Config.get_value(section, 'n_estimators'),
+                                     oob_score=PPTools.Config.get_value(section, 'oob_score'),
+                                     max_features=PPTools.Config.get_value(section, 'max_features'))
+
         #train with all features to start
 
         previous = 0
@@ -295,13 +305,16 @@ class gitProfileSet:
         frac_selected = 100 * n_relevant_features / total_num_features
         print("Percentage of features selected: {:.2f}%".format(frac_selected))
 
-    @staticmethod
-    def evaluate(clf, features, targets, splits =3):
+    def evaluate(self, clf, features, targets):
         from sklearn.model_selection import cross_val_score, ShuffleSplit
         numSamples = features.shape[0]
-        
-        trSize = int(min(1000 ,  numSamples* .5))
-        teSize = int(min(200 , numSamples* .2))
+        section = 'Cross Validation'
+
+        splits = PPTools.Config.get_value(section, 'n_splits')
+        trSize = int(min(PPTools.Config.get_value(section, 'train_min'),
+                         numSamples * PPTools.Config.get_value(section, 'train_ratio')))
+        teSize = int(min(PPTools.Config.get_value(section, 'test_min'),
+                         numSamples * PPTools.Config.get_value(section, 'test_ratio')))
         featureCount = features.shape[1]
         cv = ShuffleSplit(n_splits=splits, train_size=trSize, test_size=teSize)
         

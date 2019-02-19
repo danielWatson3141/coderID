@@ -1,4 +1,3 @@
-
 import sys
 import warnings
 if not sys.warnoptions:
@@ -14,6 +13,8 @@ import ProfileSet
 import copy
 import numpy as np
 import csv
+import Classifier
+import PPTools
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score,ShuffleSplit, StratifiedKFold
 from sklearn import metrics, utils
@@ -163,58 +164,68 @@ class MyPrompt(Cmd):
          unless multiple projects are analyzed"""
 
         """Builds and evaluates a Random Forest classifier for the chosen authors and features"""
-        
-        
+
+        expName = self.activegps.name
+        """
         args = args.split(" ")
         n_est = 300
-        numAuthors = -1
-        expName = self.activegps.name
-
+        
         if len(args) >= 1 and args[0] != '':
             numAuthors = int(args[0])
         if len(args) >= 2:
             n_est = int(args[1])
         if len(args) >= 3:
             expName = args[2]
-
+        """
+        if len(args) > 0:
+            expName = args[0]
 
         if not self.activegps.featuresDetected:
             print("Running Feature Detection")
-            self.activegps.getFeatures(numAuthors = numAuthors)
+            self.activegps.getFeatures()
 
         if self.activegps.featuresSelected is None:
             self.activegps.featureSelect()
 
         print("Generating CM")
         n_samples = len(self.activegps.target)
-        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
-        
+        #clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
+        clf = Classifier.Classifier()
+
         #shuffle the dataset
         features, targets = utils.shuffle(self.activegps.featuresSelected, self.activegps.target)
         
         #fit the model to the first 2/3 of the samples
-        clf.fit(features[:(n_samples//3)*2], targets[:(n_samples//3)*2])
+        train_size = int(np.floor(n_samples * clf.train_size))
+        clf.model.fit(features[:train_size], targets[:train_size])
         
         #predict the last 1/3 of the data
-        predictions = clf.predict(features[(n_samples//3)*2:])
-        expected = targets[(n_samples//3)*2:]
-        
-        #Compute OOB score
-        print("OOB score: "+str(clf.oob_score_))
-        
-        
-        #Compute best 50 features
-        best = self.bestNFeatures(clf.feature_importances_, self.activegps.terms, 50)
+        predictions = clf.model.predict(features[train_size:])
+        expected = targets[train_size:]
 
         import csv
 
-        #write best features
-        with open(self.resultLocation+expName+"_best_features.csv", 'w') as csvfile:
-            writer = csv.writer(csvfile, delimiter=',',
-                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            
-            for item in best:
-                writer.writerow(item)        
+        # Create csv target directory if non-existent
+        try:
+            os.mkdir(self.resultLocation)
+            print("CSV Directory ", self.resultLocation, " Created.")
+        except FileExistsError:
+            pass
+
+        if clf.model_name == 'random_forest':
+            #Compute OOB score
+            print("OOB score: "+str(clf.model.oob_score_))
+        
+            #Compute best 50 features
+            best = self.bestNFeatures(clf.model.feature_importances_, self.activegps.terms, 50)
+
+            #write best features
+            with open(self.resultLocation+expName+"_best_features.csv", 'w+') as csvfile:
+                writer = csv.writer(csvfile, delimiter=',',
+                                quotechar='|', quoting=csv.QUOTE_MINIMAL)
+
+                for item in best:
+                    writer.writerow(item)
 
 
         #compute confusion matrix
@@ -222,7 +233,7 @@ class MyPrompt(Cmd):
         print(cm)
 
         #write confusion matrix
-        with open(self.resultLocation+expName+"CM.csv", 'w') as csvfile:
+        with open(self.resultLocation+expName+"CM.csv", 'w+') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
             for row in cm:
@@ -235,7 +246,7 @@ class MyPrompt(Cmd):
         print(classification_report(expected, predictions))
         #write classification report
 
-        with open(self.resultLocation+expName+"_report.csv", 'w') as reportFile:
+        with open(self.resultLocation+expName+"_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)
 
             oneSample = list(classReport.items())[0]
@@ -565,9 +576,7 @@ class MyPrompt(Cmd):
         #TODO add quality directions
         try:
             args = args.split(":")
-            
             author = self.activegps.authors.get(args[0])
-            
 
             args = args[1].strip().split(" ")
 
