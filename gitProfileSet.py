@@ -62,15 +62,11 @@ class gitProfileSet:
             tipeCounts = dict()
 
             for commit in tqdm(miner.traverse_commits()):
-<<<<<<< e565535885836dbf5d0c0a56f2a35caba9da035b
                 author = commit.author
                 
                 if authors is not None and author not in authors:
                     continue
-                tipe = commitType.categorize(commit)
-=======
                 tipe = commitType.categorize(commit, langList=langList)
->>>>>>> Added testing for heuristics
 
                 if tipe not in tipeCounts:
                     tipeCounts.update({tipe: 0})
