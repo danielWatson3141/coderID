@@ -43,8 +43,7 @@ class MyPrompt(Cmd):
         if not os.path.isdir(self.saveLocation):
             os.mkdir(self.saveLocation)
 
-        for fileName in os.listdir(self.saveLocation):
-            self.gpsList.append(fileName)
+        self.updateList()
 
         if len(self.gpsList) is not 0:
             self.do_load(self.gpsList[0])
@@ -53,9 +52,13 @@ class MyPrompt(Cmd):
 
         self.prompt = self.activegps.name+">"
         print("Current set: "+self.activegps.name)
-        
-        
 
+    def updateList(self):
+        for fileName in os.listdir(self.saveLocation):
+            if fileName not in self.gpsList:
+                self.gpsList.append(fileName)
+
+        
     def do_save(self, filepath=''):
         """Saves active gps, overwriting given file. Also used to rename set."""
         
@@ -88,10 +91,14 @@ class MyPrompt(Cmd):
         """Switches currently active gps to one with given name. ***PROLLY SHOULD SAVE FIRST***"""
         if(args == ""):
             print("Error, must supply name of existing gps. Use 'new' to start a fresh one.")
+        if args not in self.gpsList:
+            print("GPS not found. ls to check available sets.")
+            return
         self.activegps = self.load(args)
-        self.prompt = self.activegps.name
+        self.prompt = self.activegps.name+">"
 
     def load(self, gpsName):
+        self.updateList()
         for gpsFile in self.gpsList:
             path, extension = os.path.splitext(gpsFile)
             fileName = path.split("/")[-1]
@@ -117,12 +124,13 @@ class MyPrompt(Cmd):
         dev.email = args
 
         tempAuthor = gitProfileSet.gitAuthor(dev)
-        return tempAuthor.getGPSofSelf()
+        self.save(tempAuthor.getGPSofSelf())
            
 
     
     def do_ls(self, args):
         """List all available profile sets"""
+        self.updateList()
         for gpsFile in self.gpsList:
             if self.activegps.name == gpsFile:
                 print(gpsFile+"*")
@@ -131,7 +139,7 @@ class MyPrompt(Cmd):
         
     def do_rm(self, args):
         """Removes a specified gps permanently. pass * to remove all."""
-
+        self.updateList()
         for gpsFile in self.gpsList:
             if gpsFile == args:
                 os.remove(self.saveLocation+gpsFile)
@@ -323,7 +331,8 @@ class MyPrompt(Cmd):
                 result = self.twoClassTest(authorName, dictOutput=True)
                 precision = result[authorName]["precision"]
                 recall = result[authorName]["recall"]
-                output.update({authorName:(precision, recall)})
+                support = result[authorName]["support"]
+                output.update({authorName:(precision, recall, support)})
 
         for result in output.items():
             print(result)
@@ -374,6 +383,23 @@ class MyPrompt(Cmd):
             tar.extend(teTarget)
 
         return classification_report(pred, tar, output_dict=dictOutput)
+
+    def do_getGPSAll(self, args):
+        """get GPS of all repos of all authors in repo where possible"""
+        nGPS = gitProfileSet.gitProfileSet(self.activegps.name+"_complement")
+        authCount = 0
+        for author in tqdm(self.activegps.authors.values()):
+            nGPS.authorLock.add(author.name)
+            some = False
+            for repo in author.getRepos():
+                nGPS.addRepo(repo.clone_url)
+                some = True #Did we find some repos?
+            if some:
+                authCount+=1
+        self.save(nGPS)
+
+        print(str(len(nGPS.repos))+" repos found from "+str(authCount)+" authors.")
+
 
     def do_featureDetect(self, args):
         self.activegps.getFeatures()
@@ -535,6 +561,11 @@ class MyPrompt(Cmd):
         """Displays all authors found in the currently loaded git repos"""
         self.activegps.displayAuthors()
         #print(self.activegps)
+
+    def do_displayGitRepos(self, args):
+        """Displays all repos currently in the set"""
+        for repo in self.activegps.repos:
+            print(repo)
 
     def do_setOption(self, args):
         """This method should take args option , value. Not implemented yet, check config issue on Github."""
