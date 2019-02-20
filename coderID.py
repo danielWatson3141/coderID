@@ -10,6 +10,7 @@ import zipfile
 import string
 import gitProfileSet
 import ProfileSet
+import testCommitClassification
 import copy
 import numpy as np
 import csv
@@ -696,8 +697,11 @@ class MyPrompt(Cmd):
         return sortedMatch[0:n]
 
     def do_gpsInfo(self, args):
-        """print basic info about thimining software repositories toolss gps"""
+        """print basic info about this gps"""
         print(self.activegps)
+
+    def do_testCommitClassification(self, args):
+        testCommitClassification.test_heuristic_function()
 
     
 def memory_limit():

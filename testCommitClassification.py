@@ -26,11 +26,13 @@ def classify_test_commits(repo_commits):
             only_no_merge=True,
             only_commits=commits
         )
-        repository = pydriller.GitRepository(repo)
+        #repository = pydriller.GitRepository(repo)
         print("Scanning repo: " + miner._path_to_repo)
-        print("num Commits: {}".format(len(list(miner.traverse_commits()))))
+        commits = list(miner.traverse_commits())    #traverse commits is a generator
+                                                    #so calling this fun more than once is inefficient
+        print("num Commits: {}".format(len(commits)))
 
-        for commit in miner.traverse_commits():
+        for commit in commits:
             commitLabel = commitType.categorize(commit)
             classifications.append((commit.hash, commitLabel.value))
 

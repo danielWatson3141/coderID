@@ -22,9 +22,9 @@ def check_missing_repos():
 def query_yes_no(question, yes_answer="Y", no_answer="n"):
     prompt = "[{}/{}]".format(yes_answer, no_answer)
     print("{} {}".format(question, prompt))
-
+    
     choice = input()
-    return choice == yes_answer
+    return choice.lower() == yes_answer.lower()
 
 
 def clone_test_repos():
@@ -42,6 +42,7 @@ def clone_test_repos():
     if (not can_clone_repos):
         return False
 
+    print("cloning...")
     for git_url, repo in test_repos:
         repo_path = "{}/{}".format(test_repo_dir, repo)
         subprocess.run(["git", "clone", git_url, repo_path])
