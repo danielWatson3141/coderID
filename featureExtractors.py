@@ -18,6 +18,7 @@ class featureExtractors:
                         "avg_line_len", "std_line_len", "whitespace_ratio",
                         "new_line_open_brace", "tab_lead_lines"]
 
+    # Todo: Use config here instead
     keywords = sorted(['do', 'if', 'else', 'switch', 'for', 'while'])
     tokfeatureNames = ["num_" + word for word in keywords] + \
                       ["num_keywords", "num_tokens", "num_literals",

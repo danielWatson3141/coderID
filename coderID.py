@@ -14,8 +14,7 @@ import gitProfileSet
 import ProfileSet
 import Classifier
 import PPTools
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import cross_val_score,ShuffleSplit
+import PromptTools
 from sklearn import metrics, utils
 from sklearn.metrics import classification_report
 import numpy as np
@@ -91,14 +90,11 @@ class MyPrompt(Cmd):
             path, extension = os.path.splitext(gpsFile)
             fileName = path.split("/")[-1]
             if args == fileName:
-                self.activegps = self.loadGPSFromFile(args)
+                self.activegps = PromptTools.loadGPSFromFile(args)
                 self.prompt = self.activegps.name+">"
                 break
 
-    def loadGPSFromFile(self, fileName):
-        file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
-        return pickle.Unpickler(file).load() 
-    
+
     def do_ls(self, args):
         """List all available profile sets"""
         for gpsFile in self.gpsList:
@@ -135,28 +131,22 @@ class MyPrompt(Cmd):
         print("Quitting.")
         raise SystemExit
 
+    def do_selectModel(self, args):
+        """
+        Select the classifier to use on the dataset.
+        """
+        PPTools.Config.update('Model', 'model_name', args.strip())
 
     def do_classifyFunctions(self, args):
         """Cross validate over functions committed by authors
          in all repos. This will give misleading results 
          unless multiple projects are analyzed"""
 
-        """Builds and evaluates a Random Forest classifier for the chosen authors and features"""
+        """Builds and evaluates a classifier for the chosen authors and features"""
 
         expName = self.activegps.name
-        """
-        args = args.split(" ")
-        n_est = 300
-        
-        if len(args) >= 1 and args[0] != '':
-            numAuthors = int(args[0])
-        if len(args) >= 2:
-            n_est = int(args[1])
-        if len(args) >= 3:
-            expName = args[2]
-        """
-        if len(args) > 0:
-            expName = args[0]
+        if len(args) == 1:
+            expName = args.strip()
 
         if not self.activegps.featuresDetected:
             print("Running Feature Detection")
@@ -167,7 +157,6 @@ class MyPrompt(Cmd):
 
         print("Generating CM")
         n_samples = len(self.activegps.target)
-        #clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
         clf = Classifier.Classifier()
 
         #shuffle the dataset
@@ -190,20 +179,23 @@ class MyPrompt(Cmd):
         except FileExistsError:
             pass
 
+        #Compute OOB score
         if clf.model_name == 'random_forest':
-            #Compute OOB score
             print("OOB score: "+str(clf.model.oob_score_))
-        
-            #Compute best 50 features
-            best = self.bestNFeatures(clf.model.feature_importances_, self.activegps.terms, 50)
 
-            #write best features
-            with open(self.resultLocation+expName+"_best_features.csv", 'w+') as csvfile:
-                writer = csv.writer(csvfile, delimiter=',',
-                                quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        #Compute best 50 features
+        #Need to customize for other models where possible
+        best = PromptTools.bestNFeatures(clf.get_features(), self.activegps.terms, 50)
 
-                for item in best:
-                    writer.writerow(item)
+        file_prefix = self.resultLocation + expName + '_-_' + clf.model_name
+
+        #write best features
+        with open(file_prefix + "_-_best_features.csv", 'w+') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+
+            for item in best:
+                writer.writerow(item)
 
 
         #compute confusion matrix
@@ -211,7 +203,7 @@ class MyPrompt(Cmd):
         print(cm)
 
         #write confusion matrix
-        with open(self.resultLocation+expName+"CM.csv", 'w+') as csvfile:
+        with open(file_prefix + "_-_CM.csv", 'w+') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
             for row in cm:
@@ -224,7 +216,7 @@ class MyPrompt(Cmd):
         print(classification_report(expected, predictions))
         #write classification report
 
-        with open(self.resultLocation+expName+"_report.csv", 'w+') as reportFile:
+        with open(file_prefix + "_-_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)
 
             oneSample = list(classReport.items())[0]
@@ -239,152 +231,20 @@ class MyPrompt(Cmd):
 
     def do_match(self, args):
         """search for matches in a target repo"""
-        self.detectKnownAuthors(args)
-
-    def detectKnownAuthors(self, targetRepo, maxFP=.1, n_est = 300):
-        """Given a target repo, attempt to identify any code in said repo written by any author in the gps. Will set ROC point such that FPR <= maxFP"""
-        
-        #cross validate, generating a two lists:
-            #(success: bool)
-            #(confidence: num)
-
-        if not self.activegps.featuresDetected:     #get features of currently active repo
-            self.activegps.getFeatures()
-            self.do_save("")
-
-        if self.activegps.featuresSelected is None:
-            self.activegps.featureSelect()
-            self.do_save("")
-
-        success, confidence = self.determineConfidence(self.activegps.featuresSelected, self.activegps.target)    #determine confidence of resolved classifier
-
-        decisionPoint = self.decisionMaximizationProcedure(success, confidence)
-
-
-        try:
-            targetgps = self.loadGPSFromFile(targetRepo)
-        except FileNotFoundError:
-            print("Target GPS not found. Compile it first.")
-            return
-        
-        if not targetgps.featuresDetected():
-            targetgps.getFeatures()
-        
-        #train a classifier on entire self dataset
-
-        clf = RandomForestClassifier(n_estimators=n_est, max_features="sqrt")
-        
-        clf.fit(self.activegps.featuresSelected, self.activegps.targets)
-
-        pred = clf.predict_proba(targetgps.counts[:,self.activegps.selectedIndeces])  # get matrix of class probabilities
-
-        for sample, target in zip(pred, targetgps.target):
-                predIndex = np.argmax(sample)
-                prediction = clf.classes_[predIndex]  #get item with max probability
-                confidence = sample[predIndex]
-                success = prediction == target #record whether the result was correct
-
-                if confidence > decisionPoint:
-                    print("Match: "+ prediction+", "+target+", "+confidence)
-                
-                
-    
-    def decisionMaximizationProcedure(self, success:np.array, confidence:np.array, maxFP=.1, precision = .01):
-        """return the highest d such that P(success| confidence > d) >= 1-maxFP"""
-
-        if len(success) != len(confidence):
-            raise Exception("success and confidence vectors must be equal in length")
-
-        corclass = confidence[success]      #Confidence in correct instances
-        misclass = confidence[not success]  #Confidence in incorrect instances
-
-        totalCount = len(success)
-        
-        #If misclassification rate is less than maximum false positive rate then the optimal cut-off is is the minimum of the correct instances
-        if len(misclass) < maxFP*totalCount:
-            return min(corclass)
-        
-
-        upper = 1
-        lower = 0
-        d = .5
-        fp = 1
-
-        maxIter = 10
-        iterCount = 0   #Don't iterate more than ten times. Necessary to prevent infinite loop on small datasets
-
-        while (fp > maxFP+precision or fp < maxFP-precision) and iterCount < maxIter:
-
-            
-            iterCount += 1
-
-            d = (upper+lower)/2
-            
-            fp = len(np.where(misclass>d))/totalCount   #fp rate with d at its current value
-
-            print("d: "+d+" "+"fp: "+fp)
-            
-            if fp < maxFP:
-                upper = d
-            else:
-                lower = d
-
-        if iterCount == 10:
-            print("terminated after 10 iterations. This is problematic.")
-        return d
-
-        
-    def determineConfidence(self, features, targets, n_est = 300):
-        """Cross validate over the given data and return the scores"""
-        print("Cross Validating...")
-        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
-        numSamples = features.shape[0]
-        train_size=min(1000 ,  numSamples* .5)
-        test_size=min(200 ,  numSamples* .2)
-        splits = 3
-
-        cv = ShuffleSplit(n_splits=splits, train_size=train_size, test_size=test_size)
-        
-        success = np.empty((test_size*splits))
-        confidence = np.empty((test_size*splits))
-        index = 0
-
-        for train, test in cv.split(features):
-            
-            trainingSet = (features[train], targets[train]) #Select training set
-
-            clf.fit(trainingSet[0], trainingSet[1])         #train model
-
-            testSet = (features[test], targets[test])       #Select test set
-
-            probabilities = clf.predict_proba(testSet[0])   #predict probabilities over test set
-            
-            for sample, target in zip(probabilities, testSet[1]):
-                predIndex = np.argmax(sample)
-                prediction = clf.classes_[predIndex]  #get item with max probability
-
-                success[index] = prediction == target #record whether the result was correct
-                confidence[index] = sample[predIndex] #record the confidence of the result
-                index += 1
-
-        return (success, confidence)
+        PromptTools.detectKnownAuthors(self, args)
 
     def do_authorsInCommon(self, args):
         for file1 in os.listdir(self.saveLocation):
             for file2 in os.listdir(self.saveLocation):
                 if file1 == file2:
                     break
-                gps1 = self.loadGPSFromFile(file1)
-                gps2 = self.loadGPSFromFile(file2)
-                inCommon = self.authorsInCommon(gps1, gps2)
+                gps1 = PromptTools.loadGPSFromFile(file1)
+                gps2 = PromptTools.loadGPSFromFile(file2)
+                inCommon = PromptTools.authorsInCommon(gps1, gps2)
                 
                 if inCommon: #if not empty
                     print(file1+", "+file2+": "+str(inCommon))
 
-
-    def authorsInCommon(self, gps1, gps2):
-        return [author for author in gps1.authors.keys() if author in gps2.authors]
-        
 
     def do_pruneGit(self, args):
         """Limit to N authors with between k and m functions. 0 for unlimited"""
@@ -557,43 +417,6 @@ class MyPrompt(Cmd):
                 if tempdir != None:
                     shutil.copytree(tempdir+repoDirName, outputDir+"/"+repoDirName)
                     shutil.rmtree(tempdir+repoDirName)
-
-    def sanityCheck(self, features, targets, model, numAuthors):
-
-        from sklearn import metrics,utils
-
-        n_samples = len(targets)
-       
-        features, targets = utils.shuffle(features, targets)
-        expected = targets[n_samples //2:]
-        # Test here
-        model.fit(features[:n_samples//2], targets[:n_samples//2])
-        predictions = model.predict(features[n_samples//2:])
-
-        cm = metrics.confusion_matrix(expected, predictions)
-        sortedAuthors = sorted(self.activegps.authors.keys(), reverse=False)
-        authCount = numAuthors
-        if numAuthors == -1:
-            authCount = len(sortedAuthors)
-        #assert len(sortedAuthors) == cm.shape[0]
-        """
-        for i in range(0, authCount):
-            print(sortedAuthors[i]+": P="+str(cm[i,i]/sum(cm[i]))+" R="+str(cm[i,i]/sum(cm[:,i])))
-        """
-        from sklearn.metrics import classification_report
-        print(classification_report(expected, predictions))
-
-        #import numpy
-        #numpy.set_printoptions(threshold='nan')
-        
-        print("Confusion matrix:\n%s" % cm)
-
-    @staticmethod
-    def bestNFeatures(imp, names, n):
-        match = dict(zip(names, imp))
-        import operator
-        sortedMatch = sorted(match.items(), key=operator.itemgetter(1), reverse=True)
-        return sortedMatch[0:n]
 
     def do_gpsInfo(self, args):
         """print basic info about this gps"""
