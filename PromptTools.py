@@ -1,9 +1,13 @@
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import cross_val_score,ShuffleSplit
 import numpy as np
 import os
+import csv
 import pickle
 
+from sklearn.model_selection import cross_val_score, ShuffleSplit
+from sklearn.ensemble import RandomForestClassifier
+from sklearn import metrics
+
+# TODO: move constants/"settings" to config.ini
 def loadGPSFromFile(fileName):
     file = open(os.getcwd() + "/savedSets/" + fileName, 'rb')
     return pickle.Unpickler(file).load()
@@ -11,6 +15,66 @@ def loadGPSFromFile(fileName):
 def authorsInCommon(gps1, gps2):
     return [author for author in gps1.authors.keys() if
             author in gps2.authors]
+
+def save_results(clf, gps, exp_name, result_location, expected, predictions):
+    """Save the results and details of the model and the data used to train it."""
+
+    # Create csv target directory if non-existent
+    try:
+        os.mkdir(result_location)
+        print("CSV Directory ", result_location, " Created.")
+    except FileExistsError:
+        pass
+
+    # Compute OOB score
+    if clf.model_name == 'random_forest':
+        print("OOB score: " + str(clf.model.oob_score_))
+
+    # Compute best 50 features
+    # Need to customize for other models where possible
+    best = bestNFeatures(clf.get_features(), gps.terms, 50)
+
+    file_prefix = result_location + exp_name + '_-_' + clf.model_name
+
+    # write best features
+    with open(file_prefix + "_-_best_features.csv", 'w+') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+
+        for item in best:
+            writer.writerow(item)
+
+    # compute confusion matrix
+    cm = metrics.confusion_matrix(expected, predictions)
+    print(cm)
+
+    # write confusion matrix
+    with open(file_prefix + "_-_CM.csv", 'w+') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        for row in cm:
+            writer.writerow(row)
+
+    # make classification report
+    classReport = metrics.classification_report(expected, predictions,
+                                                output_dict=True)
+
+    print(metrics.classification_report(expected, predictions))
+
+    # write classification report
+    with open(file_prefix + "_-_report.csv", 'w+') as reportFile:
+        w = csv.writer(reportFile)
+
+        oneSample = list(classReport.items())[0]
+        header = ["Author"]
+        header.extend(oneSample[1].keys())
+        w.writerow(header)
+
+        for item in classReport.items():
+            row = [item[0]]
+            row.extend(item[1].values())
+            w.writerow(row)
+
 
 def bestNFeatures(imp, names, n):
     match = dict(zip(names, imp))

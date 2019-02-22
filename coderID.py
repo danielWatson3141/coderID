@@ -15,14 +15,11 @@ import ProfileSet
 import Classifier
 import PPTools
 import PromptTools
-from sklearn import metrics, utils
-from sklearn.metrics import classification_report
 import numpy as np
 
-import csv
-
-
+from sklearn import utils
 from tqdm import tqdm
+
 
 class MyPrompt(Cmd):
 
@@ -170,64 +167,9 @@ class MyPrompt(Cmd):
         predictions = clf.model.predict(features[train_size:])
         expected = targets[train_size:]
 
-        import csv
+        # save the results to CSV files in the result location
+        PromptTools.save_results(clf, self.activegps, expName, self.resultLocation, expected, predictions)
 
-        # Create csv target directory if non-existent
-        try:
-            os.mkdir(self.resultLocation)
-            print("CSV Directory ", self.resultLocation, " Created.")
-        except FileExistsError:
-            pass
-
-        #Compute OOB score
-        if clf.model_name == 'random_forest':
-            print("OOB score: "+str(clf.model.oob_score_))
-
-        #Compute best 50 features
-        #Need to customize for other models where possible
-        best = PromptTools.bestNFeatures(clf.get_features(), self.activegps.terms, 50)
-
-        file_prefix = self.resultLocation + expName + '_-_' + clf.model_name
-
-        #write best features
-        with open(file_prefix + "_-_best_features.csv", 'w+') as csvfile:
-            writer = csv.writer(csvfile, delimiter=',',
-                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
-
-            for item in best:
-                writer.writerow(item)
-
-
-        #compute confusion matrix
-        cm = metrics.confusion_matrix(expected, predictions)
-        print(cm)
-
-        #write confusion matrix
-        with open(file_prefix + "_-_CM.csv", 'w+') as csvfile:
-            writer = csv.writer(csvfile, delimiter=',',
-                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            for row in cm:
-                writer.writerow(row)
-
-
-        #make classification report
-        classReport = classification_report(expected, predictions, output_dict=True)
-
-        print(classification_report(expected, predictions))
-        #write classification report
-
-        with open(file_prefix + "_-_report.csv", 'w+') as reportFile:
-            w = csv.writer(reportFile)
-
-            oneSample = list(classReport.items())[0]
-            header = ["Author"]
-            header.extend(oneSample[1].keys())
-            w.writerow(header)
-
-            for item in classReport.items():
-                row = [item[0]]
-                row.extend(item[1].values())
-                w.writerow(row)
 
     def do_match(self, args):
         """search for matches in a target repo"""
