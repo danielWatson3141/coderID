@@ -18,7 +18,55 @@ def is_number(s):
     except (TypeError, ValueError):
         pass
 
-    return False    
+    return False  
+
+def parse_diff(diff):
+    """
+    Given a diff, returns a dictionary with the added and deleted lines.
+    The dictionary has 2 keys: "added" and "deleted", each containing the
+    corresponding added or deleted lines. For both keys, the value is a list
+    of Tuple (int, str), corresponding to (number of line in the file, actual line).
+    This is an improved version of pydriller.gitrepository.parse_diff without repo dependency
+
+    :param str diff: diff of the commit
+    :return: Dictionary
+    """
+    lines = diff.split('\n')
+    modified_lines = {'added': [], 'deleted': []}
+
+    count_deletions = 0
+    count_additions = 0
+
+    for line in lines:
+        line = line.rstrip()
+        count_deletions += 1
+        count_additions += 1
+
+        if line.startswith('@@'):
+            count_deletions, count_additions = get_line_numbers(line)
+
+        if line.startswith('-'):
+            modified_lines['deleted'].append((count_deletions, line[1:]))
+            count_additions -= 1
+
+        if line.startswith('+'):
+            modified_lines['added'].append((count_additions, line[1:]))
+            count_deletions -= 1
+
+        if line == r'\ No newline at end of file':
+            count_deletions -= 1
+            count_additions -= 1
+
+    return modified_lines
+
+def get_line_numbers(line):
+    token = line.split(" ")
+    numbers_old_file = token[1]
+    numbers_new_file = token[2]
+    delete_line_number = int(numbers_old_file.split(",")[0].replace("-", "")) - 1
+    additions_line_number = int(numbers_new_file.split(",")[0]) - 1
+    return delete_line_number, additions_line_number
+
 
 
 class Config:

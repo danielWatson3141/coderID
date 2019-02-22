@@ -1,3 +1,11 @@
+from enum import Enum
+from sklearn.feature_selection import mutual_info_classif, SelectKBest
+from sklearn.feature_extraction.text import TfidfVectorizer
+from scipy.sparse import hstack, vstack, csr_matrix
+from tqdm import tqdm
+import itertools
+from collections import Counter
+import numpy as np
 import os
 import re
 import time
@@ -12,21 +20,15 @@ import sys
 import warnings
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
-import numpy as np
-from collections import Counter
-import itertools
-from tqdm import tqdm
-from scipy.sparse import hstack, vstack, csr_matrix
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.feature_selection import mutual_info_classif, SelectKBest
 
 
 class gitProfileSet:
 
-    #TODO: Make it so re-compiling doesn't break
-    #TODO: Make sibling class of ProfileSet
-    
-    langList =["cpp", "c", "C++", "c++", "C"]
+    # TODO: Make it so re-compiling doesn't break
+    # TODO: Make sibling class of ProfileSet
+
+    langList = ["cpp", "c", "C++", "c++", "C"]
+
     def __init__(self, name):
         """Initialize a new gitset"""
         self.name = name
@@ -36,7 +38,7 @@ class gitProfileSet:
         self.featuresSelected = None
         self.termsSelected = None
         self.minedRepos = set()
-        self.authorLock = set()
+        #self.authorLock = set()
 
     def addRepo(self, args):
         print("Adding repo: "+args)
@@ -45,55 +47,18 @@ class gitProfileSet:
                 self.repos.append(args)
         except Exception:
             print("Couldn't get that one...")
-        #self.compileAuthors(newRepo)    
-    
-    @staticmethod
-    def extractCommitInfo(commit, repository, author):          
-        for mod in commit.modifications:
-            mod._calculate_metrics()
-            if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
-                continue
-            
-            author.files.add(mod.new_path)
-            #parse diff and add lines to list
-            
-            leDiff = repository.parse_diff(mod.diff)
-            for num, line in leDiff["added"]:
-                author.lines.update({(commit.hash,mod.new_path,num):line})
+        # self.compileAuthors(newRepo)
 
-            #extract functions with lizard
-            funs = mod._function_list
-
-            #maintain list of dicts containing the source code of specific functions. Same format as for lines
-            lineIndex = 0
-            for fun in funs:
-                newFun = dict()
-                try:
-                    while(leDiff["added"][lineIndex][0]<fun.start_line):
-                        lineIndex+=1
-                
-                    while(leDiff["added"][lineIndex][0]<fun.end_line+1):
-                        newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):leDiff["added"][lineIndex][1]})
-                        lineIndex+=1
-                except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
-                    pass
-                if len(newFun) > 1:
-                    author.functions.append(newFun)    
-
-
-    def compileAuthors(self):
+    def mineLocalRepos(self):
         """Mine all repos in the repo list for commits by those in authors. None for get all"""
         for repo in self.repos:
             if repo in self.minedRepos:
                 continue
-            elif self.authorLock == set(): #check for empty authorLock
-                miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
-            else:
-                miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True,only_authors=self.authorLock)
-            
-            repository = pydriller.GitRepository(repo)
+            miner = pydriller.repository_mining.RepositoryMining(
+                repo, only_modifications_with_file_types=gitProfileSet.langList, only_no_merge=True)
+        
             print("Scanning repo: "+miner._path_to_repo)
-            
+
             tipeCounts = dict()
 
             for commit in tqdm(miner.traverse_commits()):
@@ -105,37 +70,33 @@ class gitProfileSet:
                 count = tipeCounts.get(tipe)
                 tipeCounts.update({tipe: count+1})
 
-
-                if tipe is commitType.FEATURE:
+                # if tipe is commitType.FEATURE:
+                if True:
                     if author.name not in self.authors:
-                        self.authors.update({author.name:gitAuthor(author)})
+                        self.authors.update({author.name: gitAuthor(author)})
                         #print("Found new author: "+author.name)
-                    
-                    author = self.authors.get(author.name)
 
-                    author.commits.add((repo,commit.hash))
+                    author = self.authors.get(author.name)
+                    author.commits.update({repo: commit})
+                    # author.commits.add((repo,commit.hash))
 
                     if repo not in author.repos:
                         author.repos.add(repo)
-        
-                    self.extractCommitInfo(commit, repository, author)
-                    
-                    
+
+                    author.extractCommitInfo(commit)
+
             print(str("finished"+str(miner._path_to_repo)))
             print("types: "+str(tipeCounts))
             #print(authorsWithEnoughDocs+" authors with enough code so far.")
-
-
 
     def displayAuthors(self):
         for value in self.authors.values():
             print(value)
 
-
     def getFeatures(self):
         numAuthors = PPTools.Config.get_value('Model', 'number_of_authors')
 
-        inputs=[]
+        inputs = []
         node_types = []
         code_unigrams = []
         self.target = []
@@ -144,30 +105,33 @@ class gitProfileSet:
         tokfeatureNames = featureExtractors.featureExtractors.tokfeatureNames
         tokFeatures = None
 
-        print("Gathering char and token level features") # generating tokens/unigrams
+        # generating tokens/unigrams
+        print("Gathering char and token level features")
         authors_seen = 0
         for author in tqdm(self.authors.values()):
             if numAuthors != -1 and authors_seen == numAuthors:
-                    break
+                break
             authors_seen += 1
 
             for fun in author.functions:
                 fn_str = '\n'.join(fun.values())
 
-                #whitespace fn's still getting in. This will catch for that.
+                # whitespace fn's still getting in. This will catch for that.
                 if fn_str.isspace() or fn_str == '':
                     continue
 
                 try:
                     tu = PPTools.Tokenize.get_tu(fn_str)
-                    tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
-                    inputs.append(PPTools.Tokenize.tokensToText(tokens))  # Convert to text
+                    # Sometimes this  breaks for n.a.r.
+                    tokens = list(tu.get_tokens(extent=tu.cursor.extent))
+                    inputs.append(PPTools.Tokenize.tokensToText(
+                        tokens))  # Convert to text
 
-                    #Reset tu Brute?
+                    # Reset tu Brute?
                     #tu = PPTools.Tokenize.get_tu(fn_str)
-                    
+
                     #tree = ASTFeatureExtractor.AST(tu.cursor)
-                    #tree.traverse()
+                    # tree.traverse()
 
                     # TODO: concatenate in the featureExtractor module or here?
                     #node_types.append(" ".join(tree.node_types))
@@ -183,11 +147,11 @@ class gitProfileSet:
                 """
                 # Function-string level features
                 if charLevelFeatures is None:
-                    charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
+                    charLevelFeatures = featureExtractors.featureExtractors.characterLevel(
+                        fn_str)
                 else:
                     charLevelFeatures = vstack([charLevelFeatures,
                                                 featureExtractors.featureExtractors.characterLevel(fn_str)])
-
 
                 # Token-level features
                 # if tokFeatures is None:
@@ -197,31 +161,31 @@ class gitProfileSet:
 
                 self.target.append(author.name)
                 del tokens
-            
+
         inputs = np.array(inputs)
 
         # TODO: abstract this out since it gets used a lot.
         print("Vectorizing...")
-        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
-                                       decode_error="ignore", lowercase=False)
+        vectorizer = TfidfVectorizer(analyzer="word", token_pattern="\S*",
+                                     decode_error="ignore", lowercase=False)
         vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S*",
                                         decode_error="ignore", lowercase=False,
                                         use_idf=False)
 
-        self.counts = hstack([charLevelFeatures, tokFeatures], format = 'csr')
-        self.terms = charfeatureNames #+ tokfeatureNames
+        self.counts = hstack([charLevelFeatures, tokFeatures], format='csr')
+        self.terms = charfeatureNames  # + tokfeatureNames
 
         need_tf = False
 
         #i = 0
-        #for features in tqdm([inputs, node_types, code_unigrams]):
+        # for features in tqdm([inputs, node_types, code_unigrams]):
         #    i += 1
-            # TFIDF
+        # TFIDF
         self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
-                                 format = 'csr')
+                             format='csr')
         self.terms += vectorizer.get_feature_names()
 
-            # Get only the term frequencies
+        # Get only the term frequencies
         # if need_tf:
         #     self.counts = hstack([self.counts, vectorizer_tf.fit_transform(features)],
         #                             format = 'csr')
@@ -235,8 +199,8 @@ class gitProfileSet:
         self.target = np.array(self.target)
 
         self.featuresDetected = True
-            #should fit feature detector here
-            #then pass it down
+        # should fit feature detector here
+        # then pass it down
 
     def featureSelect(self):
         section = 'Feature Selection'
@@ -245,7 +209,6 @@ class gitProfileSet:
 
         if self.featuresSelected is not None:
             print("Features selected already, skipping.")
-        
 
         total_num_features = self.counts.shape[1]
         print("Number of features before selection: {}".format(total_num_features))
@@ -253,52 +216,53 @@ class gitProfileSet:
         from sklearn.ensemble import RandomForestClassifier
         from sklearn import feature_selection
         import heapq
-        
-        #featureSets = dict() #keep track of sets and feature importances
-        #format: key=n_features value = (strength, features, importances)
+
+        # featureSets = dict() #keep track of sets and feature importances
+        # format: key=n_features value = (strength, features, importances)
 
         # clf = RandomForestClassifier(n_estimators=300, oob_score=True, max_features="sqrt")
         clf = RandomForestClassifier(n_estimators=PPTools.Config.get_value(section, 'n_estimators'),
-                                     oob_score=PPTools.Config.get_value(section, 'oob_score'),
+                                     oob_score=PPTools.Config.get_value(
+                                         section, 'oob_score'),
                                      max_features=PPTools.Config.get_value(section, 'max_features'))
 
-        #train with all features to start
+        # train with all features to start
 
         previous = 0
         strength = .01
-        
-        
+
         nFeatures = total_num_features
         features = self.counts
         terms = self.terms
-        
+
         previousFeatures = None
         previousTerms = None
 
-        #choose optimal feature set size
+        # choose optimal feature set size
         while True:
             previous = strength
-            
+
             strength, importances = self.evaluate(clf, features, self.target)
             print((nFeatures, strength))
             if strength < previous:
                 break
             from operator import itemgetter
-            match = zip(range(0, nFeatures), importances)            
-            
+            match = zip(range(0, nFeatures), importances)
+
             nFeatures = int(reductionFactor*nFeatures)
-            
+
             previousFeatures = features
             previousTerms = terms
 
-            best = list(map(lambda x: x[0], heapq.nlargest(nFeatures, match, key = itemgetter(1))))
+            best = list(map(lambda x: x[0], heapq.nlargest(
+                nFeatures, match, key=itemgetter(1))))
 
-            features = features[:,best]
+            features = features[:, best]
             terms = [terms[i] for i in best]
 
         self.featuresSelected = previousFeatures
-        self.termsSelected = previousTerms               
-        
+        self.termsSelected = previousTerms
+
         print("Features selected...")
 
         n_relevant_features = len(self.termsSelected)
@@ -319,8 +283,7 @@ class gitProfileSet:
                          numSamples * PPTools.Config.get_value(section, 'test_ratio')))
         featureCount = features.shape[1]
         cv = ShuffleSplit(n_splits=splits, train_size=trSize, test_size=teSize)
-        
-        
+
         importances = np.zeros(featureCount)
         strength = 0
         for train, test in cv.split(features, targets):
@@ -330,7 +293,7 @@ class gitProfileSet:
 
             teFeatures = features[test]
             teTarget = targets[test]
-   
+
             clf.fit(trFeatures, trTarget)
 
             predictions = clf.predict(teFeatures)
@@ -339,11 +302,10 @@ class gitProfileSet:
 
             strength += stren / splits
             importances += clf.feature_importances_ / splits
-            
 
         return (strength, importances)
 
-    def testProgrammerTransparency (self, authors = None):
+    def testProgrammerTransparency(self, authors=None):
         results = dict()
         #{name: (pr, re, f1)}
         if authors == None:
@@ -353,7 +315,7 @@ class gitProfileSet:
             results.update({author: 0})
 
         return results
-        
+
     def functionToString(self, lines):
         textLines = list(len(lines))
 
@@ -363,14 +325,12 @@ class gitProfileSet:
 
         return "\n".join(textLines)
 
-    
     def __str__(self):
-         return (str(len(self.authors))+" authors. "+str(sum(map(lambda x: len(x.functions), self.authors.values())))+" functions in total.")
+        return (str(len(self.authors))+" authors. "+str(sum(map(lambda x: len(x.functions), self.authors.values())))+" functions in total.")
 
-        
+
 class gitAuthor:
 
-    
     def __init__(self, dev):
 
         if isinstance(dev, tuple):
@@ -379,12 +339,14 @@ class gitAuthor:
             self.name = dev.name
             self.email = dev.email
 
-        self.commits = set() #store with repo:commitHash
+        self.commits = dict()  # dict of sets {repoURL: commitSha's}
         self.files = set()
-        self.functions = list() #list of dicts. Each dict represents a function. str same as self.lines 
-        self.lines = dict() #key: {commitHash,file.cpp,lineNumber} value: literal code
+        # list of dicts. Each dict represents a function. str same as self.lines
+        self.functions = list()
+        # key: {commitHash,file.cpp,lineNumber} value: literal code
+        self.lines = dict()
         self.repos = set()
-    
+
     def merge(self, other):
         """merges the authors into one author object, keeping self.name"""
         print("Merging author: "+self.name)
@@ -392,15 +354,61 @@ class gitAuthor:
         self.functions.extend(other.functions)
         self.files.union(other.files)
         self.lines.update(other.lines)
-        
+
     def __str__(self):
-        return self.name+": "+str(len(self.commits))+" commits. "+str(len(self.lines))+" LOC, "+str(len(self.functions))+" complete functions from "+str(len(self.repos))+ " repos."
-    
+        return self.name+": "+str(len(self.commits))+" commits. "+str(len(self.lines))+" LOC, "+str(len(self.functions))+" complete functions from "+str(len(self.repos)) + " repos."
+
+    def extractCommitInfo(self, commit):
+        for mod in commit.modifications:
+            mod._calculate_metrics()
+            if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
+                continue
+
+            self.files.add(mod.new_path)
+            # parse diff and add lines to list
+
+            leDiff = PPTools.parse_diff(mod.diff)
+            for num, line in leDiff["added"]:
+                self.lines.update({(commit.hash, mod.new_path, num): line})
+
+            # extract functions with lizard
+            funs = mod._function_list
+
+            # maintain list of dicts containing the source code of specific functions. Same format as for lines
+            lineIndex = 0
+            for fun in funs:
+                newFun = dict()
+                try:
+                    while(leDiff["added"][lineIndex][0] < fun.start_line):
+                        lineIndex += 1
+
+                    while(leDiff["added"][lineIndex][0] < fun.end_line+1):
+                        newFun.update(
+                            {(commit.hash, mod.new_path, leDiff["added"][lineIndex][0]): leDiff["added"][lineIndex][1]})
+                        lineIndex += 1
+                # if end of input reached before end of functions. This is probable when non-complete functions are submitted.
+                except IndexError:
+                    pass
+                if len(newFun) > 1:
+                    self.functions.append(newFun)
+
     def getNamedUser(self):
+        """Best effort search of github for the user by both name and email"""
         with open(os.getcwd()+"/github.token", 'r') as file:
             g = github.MainClass.Github(file.readline().split("\n")[0])
 
-        return(g.search_users(self.email+" in:email"))
+        result = g.search_users(self.email+" in:email")
+        if result.totalCount > 0:
+            return result
+        
+        result = g.search_users(self.name+" in:fullname")
+        if result.totalCount > 0:
+            return result
+        
+        result = g.search_users(self.name+" in:login")
+        if result.totalCount > 0:
+            return result
+        
 
 
     def getRepos(self, skip=None):
@@ -432,44 +440,87 @@ class gitAuthor:
 
     def fetchCommits(self):
         """Fetch all public commits and stores in self.commits"""
-        usr = self.getNamedUser()[0]
+        usr = self.getNamedUser()
+
+        if usr.totalCount == 0:
+            print("No user found for "+self.name)
+            return
+
+        if usr.totalCount > 1:
+            print("Multiple users found for "+self.name)
+        
+        usr = usr[0]
+
         events = usr.get_events()
-        commits = dict() #repo: hash
         print("getting commits for "+self.name)
         for event in events:
-            if event.type is 'PushEvent':
-                commits = event.payload['commits']
+            if event.type == "PushEvent":
+                #commits = event.payload['commits']
                 repo = event.repo
                 if not repo.language in gitProfileSet.langList:
                     continue
-                self.repos.add(repo)
-                for commit in commits:
-                    commits.update[{repo:commit.hash}]
+                self.repos.add(repo.git_url)
+                comparison = repo.compare(event._payload.value['before'], event._payload.value['head'])
+                self.commits[event.id] = comparison
+
+    def extractComparisonInfo(self, comparison):
+        files = comparison.files  # get files in commit
+
+        # TODO: This section is just gross, consider refactor
+        for f in files:
+            filename = f.filename
+            if len(filename.split(".")) >= 2:
+                ext = filename.split(".")[-1]
+                if ext in gitProfileSet.langList:  # check for files with c or c++ extensions
+                    diff = PPTools.parse_diff(f.patch)  # parse the diff
+
+                    newSC = list()
+                    for line in diff["added"]:  # save each line
+                        newSC.append(line[1])
+                    from lizard import analyze_file as liz
+                    fileInfo = liz.analyze_source_code(
+                        filename, "\n".join(newSC))  # ask lizard for functions
+                    lineIndex = 0
+                    for fun in fileInfo.function_list:  # separate source code out by functions
+                        newFun = dict()
+                        try:
+                            while lineIndex+1 < fun.start_line:
+                                lineIndex += 1
+
+                            while(lineIndex < fun.end_line):
+                                newFun.update(
+                                    {(comparison.base_commit.sha, filename, diff["added"][lineIndex][0]): diff["added"][lineIndex][1]})
+                                self.lines.update(
+                                    {(comparison.base_commit.sha, filename, diff["added"][lineIndex][0]): diff["added"][lineIndex][1]})
+                                lineIndex += 1
+                        # if end of input reached before end of functions. This is probable when non-complete functions are submitted.
+                        except IndexError:
+                            pass
+                        if len(newFun) > 1:
+                            self.functions.append(newFun)
 
     def mineCommits(self):
-        for repo, chash in self.commits:
-            repository = pydriller.GitRepository(repo)
-            commit = repository.get_commit(chash)
-            gitProfileSet.extractCommitInfo(commit, repository, self)
+        print("Mining Commits...")
+        for comparison in tqdm(self.commits.values()):
+            self.extractComparisonInfo(comparison)
 
-
-    def getGPSofSelf(self, skipGiven = True, mine = False):
+    def getGPSofSelf(self, skip):
         """Generates a GPS containing this author and all of their public commits."""
 
         gps = gitProfileSet(self.name)
-        gps.authorLock.add(self.name)
-        
+        #gps.authorLock.add(self.name)
+
         author = gitAuthor((self.name, self.email))
         gps.authors.update({self.name: author})
 
         author.fetchCommits()
         author.mineCommits()
 
-        #TODO: finish this
+        # TODO: finish this
 
         return gps
 
-from enum import Enum     
+
 class commitType(Enum):
     FEATURE = "FC"
     BUGFIX = "BF"
@@ -481,33 +532,29 @@ class commitType(Enum):
     def describe(self):
         # self is the member here
         return self.name, self.value
-    
-    #TODO: User better heuristic
+
+    # TODO: User better heuristic
     @staticmethod
     def categorize(commit):
-        added= 0
-        removed =0
+        added = 0
+        removed = 0
         for mod in commit.modifications:
             if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
                 continue
-            #mod._calculate_metrics()
+            # mod._calculate_metrics()
             added += mod.added
             removed += mod.removed
 
         if added == 0:
             return commitType.OTHER
-        
+
         if added-removed < .1*added:
             if added < 20:
                 return commitType.BUGFIX
             else:
-                return commitType.REFACTOR        
-        
+                return commitType.REFACTOR
+
         if added > 20:
             return commitType.FEATURE
 
         return commitType.OTHER
-
-
-
-        

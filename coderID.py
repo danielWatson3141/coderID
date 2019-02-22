@@ -37,8 +37,18 @@ class MyPrompt(Cmd):
         self.featuresDetected = False
             
         self.gpsList = list()
-        self.saveLocation = os.getcwd()+"/savedSets/"
-        self.resultLocation = os.getcwd()+"/classResults/"
+
+        cfg = PPTools.Config.config
+
+        self.saveLocation = os.getcwd()+cfg['dir']['save']
+        self.resultLocation = os.getcwd()+cfg['dir']['csv_output']
+        self.dataStore = os.getcwd()+cfg['dir']['data_store']
+
+        if not os.path.isdir(self.saveLocation):
+            os.mkdir(self.saveLocation)
+        
+        if not os.path.isdir(self.saveLocation):
+            os.mkdir(self.saveLocation)
 
         if not os.path.isdir(self.saveLocation):
             os.mkdir(self.saveLocation)
@@ -58,6 +68,16 @@ class MyPrompt(Cmd):
             if fileName not in self.gpsList:
                 self.gpsList.append(fileName)
 
+    def do_new(self, args):
+        """Re-initializes profile set to be empty"""
+        if args == "":
+            print("No name given, initializing to \"default\"")
+            self.activegps = gitProfileSet.gitProfileSet("default")
+        else:
+            self.activegps = gitProfileSet.gitProfileSet(args)
+            self.gpsList.append(args)
+
+        self.prompt = self.activegps.name+">"
         
     def do_save(self, filepath=''):
         """Saves active gps, overwriting given file. Also used to rename set."""
@@ -108,26 +128,7 @@ class MyPrompt(Cmd):
     def loadGPSFromFile(self, fileName):
         file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
         return pickle.Unpickler(file).load() 
-
-    def do_getGPSForAuthor(self, args):
-
-        try:
-            author = self.activegps.authors[args] 
-        except Exception:
-            print("Author not found")
-
-        self.save(author.getGPSofSelf())
-
-    def do_getGPSForEmail(self, args):
-        dev = object()
-        dev.name = args.split("@")[0]
-        dev.email = args
-
-        tempAuthor = gitProfileSet.gitAuthor(dev)
-        self.save(tempAuthor.getGPSofSelf())
            
-
-    
     def do_ls(self, args):
         """List all available profile sets"""
         self.updateList()
@@ -158,13 +159,12 @@ class MyPrompt(Cmd):
         for subdir in os.listdir(directory):
             self.do_new(subdir)
             self.do_loadGit(directory+"/"+subdir)
-            self.do_compile("")
+            self.do_mineRepos("")
         
     def do_quit(self, args):
         """quits the program WITHOUT SAVING"""
         print("Quitting.")
         raise SystemExit
-
 
     def do_classifyFunctions(self, args):
         """Cross validate over functions committed by authors
@@ -272,7 +272,7 @@ class MyPrompt(Cmd):
         self.detectKnownAuthors(args)
 
     def detectKnownAuthors(self, targetRepo, maxFP=.1, n_est = 300):
-        """Given a target repo, attempt to identify any code in said repo written by any author in the gps. Will set ROC point such that FPR <= maxFP"""
+        """Given a target repo, attempt to identify any code in said repo written by any author in the active gps. Will set ROC point such that FPR <= maxFP"""
         
         #cross validate, generating a two lists:
             #(success: bool)
@@ -385,21 +385,39 @@ class MyPrompt(Cmd):
         return classification_report(pred, tar, output_dict=dictOutput)
 
     def do_getGPSAll(self, args):
-        """get GPS of all repos of all authors in repo where possible"""
+        """get GPS of all repos of all authors in repo where possible. Type "skip" (or anything really) to skip commits to the active GPS"""
+        
+        if not args == '':
+            skip = map(lambda x: x.split("/")[-1], self.activegps.repos)
+        else:
+            skip = []
+        
         nGPS = gitProfileSet.gitProfileSet(self.activegps.name+"_complement")
+        
         authCount = 0
         for author in tqdm(self.activegps.authors.values()):
-            nGPS.authorLock.add(author.name)
-            some = False
-            for repo in author.getRepos():
-                nGPS.addRepo(repo.clone_url)
-                some = True #Did we find some repos?
-            if some:
-                authCount+=1
+            nGPS = author.getGPSofSelf(skip)
+
         self.save(nGPS)
 
         print(str(len(nGPS.repos))+" repos found from "+str(authCount)+" authors.")
 
+    def do_getGPSForAuthor(self, args):
+
+        try:
+            author = self.activegps.authors[args] 
+        except Exception:
+            print("Author not found")
+
+        self.save(author.getGPSofSelf())
+
+    def do_getGPSForEmail(self, args):
+        dev = object()
+        dev.name = args.split("@")[0]
+        dev.email = args
+
+        tempAuthor = gitProfileSet.gitAuthor(dev)
+        self.save(tempAuthor.getGPSofSelf())
 
     def do_featureDetect(self, args):
         self.activegps.getFeatures()
@@ -457,7 +475,6 @@ class MyPrompt(Cmd):
             print("terminated after 10 iterations. This is problematic.")
         return d
 
-        
     def determineConfidence(self, features, targets, n_est = 300):
         """Cross validate over the given data and return the scores"""
         print("Cross Validating...")
@@ -505,11 +522,8 @@ class MyPrompt(Cmd):
                 if inCommon: #if not empty
                     print(file1+", "+file2+": "+str(inCommon))
 
-
-
     def authorsInCommon(self, gps1, gps2):
         return [author for author in gps1.authors.keys() if author in gps2.authors]
-        
 
     def do_pruneGit(self, args):
         """Limit to N authors with between k and m functions. 0 for unlimited"""
@@ -537,17 +551,6 @@ class MyPrompt(Cmd):
 
         self.activegps.authors = new
         self.activegps.featuresDetected = False
-
-    def do_new(self, args):
-        """Re-initializes profile set to be empty"""
-        if args == "":
-            print("No name given, initializing to \"default\"")
-            self.activegps = gitProfileSet.gitProfileSet("default")
-        else:
-            self.activegps = gitProfileSet.gitProfileSet(args)
-            self.gpsList.append(args)
-
-        self.prompt = self.activegps.name+">"
              
     def do_loadGit(self, args):
         """Loads a single git repo. Can be local or remote."""
@@ -571,7 +574,6 @@ class MyPrompt(Cmd):
         """This method should take args option , value. Not implemented yet, check config issue on Github."""
         pass
 
-
     def do_loadGitRepos(self, args):
         """Loads a directory args[0] of git repos, as many as args[1] def:inf"""
         args = args.split(" ")
@@ -587,21 +589,20 @@ class MyPrompt(Cmd):
             if not os.path.basename(repos[i])[0]==".":
                 self.do_loadGit(repos[i])
 
-    def do_compile(self, args):
+    def do_mineRepos(self, args):
         """Mine the selected repos for relevant commits. Saves automatically upon completion, so if you want a name other than default save it first"""
         args = args.split(" ")
        # try:
         if len(args) > 1:
             self.activegps.compileAuthors(int(args[0]), int(args[1]) )
         else:
-            self.activegps.compileAuthors()
+            self.activegps.mineLocalRepos()
         print("Compilation Complete")
         #except Exception:
          #   print("Problem during compilation. Saving...")
         
         self.do_save()
-        
-       
+           
     def do_view(self, args):
         """View author[0]'s: n[1] most recent (commits, repos, files, functions, lines)[3]"""
         #TODO add quality directions
@@ -650,7 +651,6 @@ class MyPrompt(Cmd):
             print("Hint: view Dan: 10 lines")
             return
     
-
     def do_getGitRepos(self,args):
         """WINDOWS ONLY Read repos from reporeapers .csv file, fetch and store in target directory, using temp if specified. Use temp if trying to download to external drive"""
         if args == "":
