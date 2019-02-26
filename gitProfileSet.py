@@ -52,11 +52,11 @@ class gitProfileSet:
     def mineLocalRepos(self):
         """Mine all repos in the repo list for commits by those in authors. None for get all"""
         for repo in self.repos:
-            if repo in self.minedRepos:
+            if repo in self.minedRepos or repo is None:
                 continue
             miner = pydriller.repository_mining.RepositoryMining(
                 repo, only_modifications_with_file_types=gitProfileSet.langList, only_no_merge=True)
-        
+
             print("Scanning repo: "+miner._path_to_repo)
 
             tipeCounts = dict()
@@ -77,7 +77,8 @@ class gitProfileSet:
                         #print("Found new author: "+author.name)
 
                     author = self.authors.get(author.name)
-                    author.commits.update({repo: commit})
+
+                    author.commits.update({(repo, commit.hash): commit})
                     # author.commits.add((repo,commit.hash))
 
                     if repo not in author.repos:
@@ -339,8 +340,8 @@ class gitAuthor:
             self.name = dev.name
             self.email = dev.email
 
-        self.commits = dict()  # dict of sets {repoURL: commitSha's}
-        self.files = set()
+        self.commits = set()  # dict of sets {repoURL: commitSha's}
+        #self.files = set()
         # list of dicts. Each dict represents a function. str same as self.lines
         self.functions = list()
         # key: {commitHash,file.cpp,lineNumber} value: literal code
@@ -350,9 +351,9 @@ class gitAuthor:
     def merge(self, other):
         """merges the authors into one author object, keeping self.name"""
         print("Merging author: "+self.name)
-        self.commits.update(other.commits)
+        self.commits.add(other.commits)
         self.functions.extend(other.functions)
-        self.files.union(other.files)
+        # self.files.union(other.files)
         self.lines.update(other.lines)
 
     def __str__(self):
@@ -364,7 +365,7 @@ class gitAuthor:
             if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
                 continue
 
-            self.files.add(mod.new_path)
+            # self.files.add(mod.new_path)
             # parse diff and add lines to list
 
             leDiff = PPTools.parse_diff(mod.diff)
@@ -393,23 +394,79 @@ class gitAuthor:
                     self.functions.append(newFun)
 
     def getNamedUser(self):
-        """Best effort search of github for the user by both name and email"""
+        """Best effort search of github for the user by both name, email and fullname. Always returns single best match"""
         with open(os.getcwd()+"/github.token", 'r') as file:
-            g = github.MainClass.Github(file.readline().split("\n")[0])
+            g = github.MainClass.Github(file.readline().split("\n")[0], timeout=30)
 
-        result = g.search_users(self.email+" in:email")
-        if result.totalCount > 0:
-            return result
-        
-        result = g.search_users(self.name+" in:fullname")
-        if result.totalCount > 0:
-            return result
-        
-        result = g.search_users(self.name+" in:login")
-        if result.totalCount > 0:
-            return result
+        emailResult = None
+        try:
+            emailResult = g.search_users(self.email+" in:email")
+            if emailResult.totalCount == 1:
+                return emailResult[0]
+        except Exception:
+            pass
+
+        fullNameResult = None
+        try:
+            fullNameResult = g.search_users(self.name+" in:fullname")
+            if fullNameResult.totalCount == 1:
+                return fullNameResult[0]
+        except Exception:
+            pass
+
+        loginResult = None
+        try:
+            loginResult = g.search_users(self.name+" in:login")
+            if loginResult.totalCount == 1:
+                return loginResult[0]
+        except Exception:
+            pass
+
+        if emailResult.totalCount > 0 or loginResult.totalCount > 0 or fullNameResult.totalCount > 0:
+            return self.ghUserListIntersection(emailResult, loginResult, fullNameResult)
+        else:
+            return None
+
+    @staticmethod
+    def ghUserListIntersection(email, login, fullname):
+        foundUsers = set()
+
+        if email.totalCount > 100 or email.totalCount == 0:
+            email = None    #prevent API drain from long lists
+        if login.totalCount > 100 or login.totalCount == 0:
+            login = None    #prevent API drain from long lists
+        if fullname.totalCount > 100 or fullname.totalCount == 0:
+            fullname = None
         
 
+        if email:
+            foundUsers = foundUsers.union(email)
+
+        if login:
+            if not foundUsers:
+                foundUsers = foundUsers.union(login)
+            else:
+                foundUsers = foundUsers.intersection(login)
+
+        if len(foundUsers) == 1:
+            return list(foundUsers)[0]
+
+        if fullname:
+            if not foundUsers:
+                foundUsers = foundUsers.union(fullname)
+            else:
+                foundUsers = foundUsers.intersection(fullname)
+
+        if foundUsers:
+            return list(foundUsers)[0]
+        elif email:
+            return email[0]
+        elif login:
+            return login[0]
+        elif fullname:
+            return fullname[0]
+
+        return None
 
     def getRepos(self, skip=None):
         """Get all repos associated with a given author, except for those in skip"""
@@ -427,8 +484,8 @@ class gitAuthor:
 
                 return repoList
             except github.RateLimitExceededException:
-                print("API rate limit exceeded. Chilling for 45 seconds.")
-                time.sleep(45)
+                print("API rate limit exceeded. Chilling for 60 seconds.")
+                time.sleep(60)
 
             except github.GithubException:
                 print("Appears we got a 502, wait a second...")
@@ -440,38 +497,53 @@ class gitAuthor:
 
     def fetchCommits(self):
         """Fetch all public commits and stores in self.commits"""
-        usr = self.getNamedUser()
+        user = self.getNamedUser()
+        if user is None:
+            return None
 
-        if usr.totalCount == 0:
-            print("No user found for "+self.name)
-            return
-
-        if usr.totalCount > 1:
-            print("Multiple users found for "+self.name)
-        
-        usr = usr[0]
-
-        events = usr.get_events()
-        print("getting commits for "+self.name)
+        events = user.get_events()
+        mods = []
         for event in events:
             if event.type == "PushEvent":
-                #commits = event.payload['commits']
-                repo = event.repo
-                if not repo.language in gitProfileSet.langList:
+                try:
+                    commits = event.payload['commits']
+                    repo = event.repo
+                    if not repo.language in gitProfileSet.langList:
+                        continue
+                    self.repos.add(repo.git_url)
+                    try:
+                        comparison = repo.compare(event._payload.value['before'], event._payload.value['head'])
+                    except Exception:
+                        print("likely timeout. Trying again in 5 seconds")
+                        time.sleep(5)
+                        try:
+                            comparison = repo.compare(event._payload.value['before'], event._payload.value['head'])
+                        except Exception:
+                            continue
+                        
+                    mods.append(comparison)
+                    self.commits.add((repo.git_url, commits[0]['sha']))
+                except github.GithubException:
+                    print("Encountered GH problem.")
                     continue
-                self.repos.add(repo.git_url)
-                comparison = repo.compare(event._payload.value['before'], event._payload.value['head'])
-                self.commits[event.id] = comparison
+        if mods == []:
+            return None
+        else:
+            return mods
 
     def extractComparisonInfo(self, comparison):
         files = comparison.files  # get files in commit
 
         # TODO: This section is just gross, consider refactor
         for f in files:
+            if f.additions == 0:
+                continue
             filename = f.filename
             if len(filename.split(".")) >= 2:
                 ext = filename.split(".")[-1]
                 if ext in gitProfileSet.langList:  # check for files with c or c++ extensions
+                    if f.patch is None:
+                        continue
                     diff = PPTools.parse_diff(f.patch)  # parse the diff
 
                     newSC = list()
@@ -499,23 +571,31 @@ class gitAuthor:
                         if len(newFun) > 1:
                             self.functions.append(newFun)
 
-    def mineCommits(self):
-        print("Mining Commits...")
-        for comparison in tqdm(self.commits.values()):
+    def mineMods(self, mods):
+        #print("Mining Commits...")
+        for comparison in mods:
             self.extractComparisonInfo(comparison)
 
-    def getGPSofSelf(self, skip):
+    def getGPSofSelf(self, skip=[]):
         """Generates a GPS containing this author and all of their public commits."""
 
         gps = gitProfileSet(self.name)
-        #gps.authorLock.add(self.name)
+        # gps.authorLock.add(self.name)
 
         author = gitAuthor((self.name, self.email))
+
         gps.authors.update({self.name: author})
 
-        author.fetchCommits()
-        author.mineCommits()
+        try:
+            mods = author.fetchCommits()
+        except github.RateLimitExceededException:
+            print("API rate limit exceeded. Chilling for 60 seconds.")
+            for i in tqdm(range(1, 60)):
+                time.sleep(1)
+            return self.getGPSofSelf(skip)
 
+        author.mineMods(mods)
+        
         # TODO: finish this
 
         return gps
@@ -539,7 +619,7 @@ class commitType(Enum):
         added = 0
         removed = 0
         for mod in commit.modifications:
-            if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
+            if mod.new_path is None or mod.new_path.split(".")[-1] not in gitProfileSet.langList:
                 continue
             # mod._calculate_metrics()
             added += mod.added

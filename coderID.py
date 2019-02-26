@@ -10,6 +10,7 @@ import zipfile
 import string
 import gitProfileSet
 import ProfileSet
+import testCommitClassification
 import copy
 import numpy as np
 import csv
@@ -43,7 +44,8 @@ class MyPrompt(Cmd):
         self.saveLocation = os.getcwd()+cfg['dir']['save']
         self.resultLocation = os.getcwd()+cfg['dir']['csv_output']
         self.dataStore = os.getcwd()+cfg['dir']['data_store']
-
+        self.authorStore = os.getcwd()+cfg['dir']['author_store']
+        self.repoStore = os.getcwd()+cfg['dir']['repo_store']
         if not os.path.isdir(self.saveLocation):
             os.mkdir(self.saveLocation)
         
@@ -101,11 +103,15 @@ class MyPrompt(Cmd):
         
         print("Saved to "+newName)
 
-    @staticmethod
-    def save(gps):
-        file = open(os.getcwd()+"/savedSets/"+gps.name, 'wb')
+    def save(self, gps, fileName = None):
+
+        if fileName is None:
+            file = open(self.saveLocation+gps.name, 'wb')
+        else:
+            file = open(fileName, 'wb')
+            
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
-        pickler.dump(copy.deepcopy(gps))
+        pickler.dump(gps)
         
     def do_load(self, args):
         """Switches currently active gps to one with given name. ***PROLLY SHOULD SAVE FIRST***"""
@@ -126,7 +132,12 @@ class MyPrompt(Cmd):
                 return(self.loadGPSFromFile(gpsName))
 
     def loadGPSFromFile(self, fileName):
-        file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
+
+        if "/" in fileName:
+            file = open(fileName, 'rb')
+        else:
+            file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
+        
         return pickle.Unpickler(file).load() 
            
     def do_ls(self, args):
@@ -394,30 +405,29 @@ class MyPrompt(Cmd):
         
         nGPS = gitProfileSet.gitProfileSet(self.activegps.name+"_complement")
         
-        authCount = 0
         for author in tqdm(self.activegps.authors.values()):
-            nGPS = author.getGPSofSelf(skip)
+            authfile = self.authorStore+author.name
+            if os.path.isfile(authfile):
+                authGPS = self.loadGPSFromFile(authfile)
+            else:
+                authGPS = author.getGPSofSelf(skip)
+                self.save(authGPS, authfile) #write gps to disk, even if empty. This helps prevent unnecessary API requests
+            nGPS.authors.update(authGPS.authors)
 
         self.save(nGPS)
-
-        print(str(len(nGPS.repos))+" repos found from "+str(authCount)+" authors.")
+        
+        print(str(len(nGPS.authors))+" authors found from "+str(len(self.activegps.authors))+" authors.")
 
     def do_getGPSForAuthor(self, args):
 
         try:
             author = self.activegps.authors[args] 
         except Exception:
-            print("Author not found")
-
+            print("Author not found in current set, making anew")
+            author = gitProfileSet.gitAuthor((args, ""))
+            #return
+        
         self.save(author.getGPSofSelf())
-
-    def do_getGPSForEmail(self, args):
-        dev = object()
-        dev.name = args.split("@")[0]
-        dev.email = args
-
-        tempAuthor = gitProfileSet.gitAuthor(dev)
-        self.save(tempAuthor.getGPSofSelf())
 
     def do_featureDetect(self, args):
         self.activegps.getFeatures()
@@ -592,16 +602,50 @@ class MyPrompt(Cmd):
     def do_mineRepos(self, args):
         """Mine the selected repos for relevant commits. Saves automatically upon completion, so if you want a name other than default save it first"""
         args = args.split(" ")
-       # try:
-        if len(args) > 1:
-            self.activegps.compileAuthors(int(args[0]), int(args[1]) )
-        else:
-            self.activegps.mineLocalRepos()
+        # try:
+        keep = []
+        for i in range(0, len(self.activegps.repos)):
+            repo = self.activegps.repos[i]
+            if os.path.isdir(repo):
+                keep.append(i)
+                continue
+            import re
+            if re.match("[a-zA-Z]*/[a-zA-Z]*", repo).endpos == len(repo):
+                destination = self.repoStore+repo.replace("/", "_")
+                if os.path.isdir(destination):
+                    keep.append(i)
+                    self.activegps.repos[i] = destination+"/"+repo.split("/")[1]
+                    continue
+                else:
+                    success = self.clone_repo(repo, destination)
+                    if success:
+                        self.activegps.repos[i] = destination+"/"+repo.split("/")[1]
+                        keep.append(i)
+                        continue
+            print(repo +" not kept.")
+
+        self.activegps.repos = [self.activegps.repos[i] for i in keep]  
+        self.activegps.mineLocalRepos()
         print("Compilation Complete")
         #except Exception:
          #   print("Problem during compilation. Saving...")
         
         self.do_save()
+
+    def clone_repo(self, targetRepo, destination):
+        try:
+            with open(os.getcwd()+"/github.token", 'r') as file:
+                import github
+                g = github.MainClass.Github(file.readline().split("\n")[0], timeout=30)
+            targetRepoURL = g.search_repositories(targetRepo)[0].clone_url
+
+            os.mkdir(destination)
+            import git
+            git.Git(destination).clone(targetRepoURL)
+        except Exception:
+            print("repo not cloned: "+targetRepo)
+            return False
+        return True
            
     def do_view(self, args):
         """View author[0]'s: n[1] most recent (commits, repos, files, functions, lines)[3]"""
@@ -727,8 +771,11 @@ class MyPrompt(Cmd):
         return sortedMatch[0:n]
 
     def do_gpsInfo(self, args):
-        """print basic info about thimining software repositories toolss gps"""
+        """print basic info about this gps"""
         print(self.activegps)
+
+    def do_testCommitClassification(self, args):
+        testCommitClassification.test_heuristic_function()
 
     
 def memory_limit():

@@ -8,4 +8,6 @@
 *.csv*
 /savedSets/
 /classResults/
+/gitRepos/
+/authors/
 *.token
