@@ -107,7 +107,7 @@ class gitProfileSet:
         tokFeatures = None
 
         # generating tokens/unigrams
-        print("Gathering char and token level features")
+        print("Gathering char and token level features for "+self.name)
         authors_seen = 0
         for author in tqdm(self.authors.values()):
             if numAuthors != -1 and authors_seen == numAuthors:
@@ -203,15 +203,16 @@ class gitProfileSet:
         # should fit feature detector here
         # then pass it down
 
-    def featureSelect(self):
+    @staticmethod
+    def featureSelect(features, terms, targets):
         section = 'Feature Selection'
         reductionFactor = PPTools.Config.get_value(section, 'reduction_factor')
         # First round feature selection using mutual information
 
-        if self.featuresSelected is not None:
-            print("Features selected already, skipping.")
+        #if self.featuresSelected is not None:
+        #    print("Features selected already, skipping.")
 
-        total_num_features = self.counts.shape[1]
+        total_num_features = features.shape[1]
         print("Number of features before selection: {}".format(total_num_features))
 
         from sklearn.ensemble import RandomForestClassifier
@@ -233,8 +234,8 @@ class gitProfileSet:
         strength = .01
 
         nFeatures = total_num_features
-        features = self.counts
-        terms = self.terms
+        #features = self.counts
+        #terms = self.terms
 
         previousFeatures = None
         previousTerms = None
@@ -243,7 +244,7 @@ class gitProfileSet:
         while True:
             previous = strength
 
-            strength, importances = self.evaluate(clf, features, self.target)
+            strength, importances = gitProfileSet.evaluate(clf, features, targets)
             print((nFeatures, strength))
             if strength < previous:
                 break
@@ -261,18 +262,20 @@ class gitProfileSet:
             features = features[:, best]
             terms = [terms[i] for i in best]
 
-        self.featuresSelected = previousFeatures
-        self.termsSelected = previousTerms
+        featuresSelected = previousFeatures
+        termsSelected = previousTerms
 
         print("Features selected...")
 
-        n_relevant_features = len(self.termsSelected)
+        n_relevant_features = len(termsSelected)
 
         print("Number of features after selection: {}".format(n_relevant_features))
         frac_selected = 100 * n_relevant_features / total_num_features
         print("Percentage of features selected: {:.2f}%".format(frac_selected))
 
-    def evaluate(self, clf, features, targets):
+        return (featuresSelected, termsSelected)
+    @staticmethod
+    def evaluate(clf, features, targets):
         from sklearn.model_selection import cross_val_score, ShuffleSplit
         numSamples = features.shape[0]
         section = 'Cross Validation'
@@ -495,15 +498,19 @@ class gitAuthor:
 
         return repoList
 
-    def fetchCommits(self):
+    def fetchCommits(self, skip):
         """Fetch all public commits and stores in self.commits"""
+        
+        skip = list(map(lambda x: x.split("/")[-1], skip))
+        
         user = self.getNamedUser()
         if user is None:
-            return None
+            return []
 
         events = user.get_events()
         mods = []
-        for event in events:
+        print("Fetching author commits...")
+        for event in tqdm(events):
             if event.type == "PushEvent":
                 try:
                     commits = event.payload['commits']
@@ -526,10 +533,7 @@ class gitAuthor:
                 except github.GithubException:
                     print("Encountered GH problem.")
                     continue
-        if mods == []:
-            return None
-        else:
-            return mods
+        return mods
 
     def extractComparisonInfo(self, comparison):
         files = comparison.files  # get files in commit
@@ -587,7 +591,7 @@ class gitAuthor:
         gps.authors.update({self.name: author})
 
         try:
-            mods = author.fetchCommits()
+            mods = author.fetchCommits(skip)
         except github.RateLimitExceededException:
             print("API rate limit exceeded. Chilling for 60 seconds.")
             for i in tqdm(range(1, 60)):

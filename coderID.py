@@ -41,19 +41,25 @@ class MyPrompt(Cmd):
 
         cfg = PPTools.Config.config
 
+        self.cfg = cfg
         self.saveLocation = os.getcwd()+cfg['dir']['save']
         self.resultLocation = os.getcwd()+cfg['dir']['csv_output']
         self.dataStore = os.getcwd()+cfg['dir']['data_store']
         self.authorStore = os.getcwd()+cfg['dir']['author_store']
         self.repoStore = os.getcwd()+cfg['dir']['repo_store']
-        if not os.path.isdir(self.saveLocation):
-            os.mkdir(self.saveLocation)
-        
-        if not os.path.isdir(self.saveLocation):
-            os.mkdir(self.saveLocation)
 
         if not os.path.isdir(self.saveLocation):
             os.mkdir(self.saveLocation)
+        
+        if not os.path.isdir(self.resultLocation):
+            os.mkdir(self.resultLocation)
+
+
+        if not os.path.isdir(self.authorStore):
+            os.mkdir(self.authorStore)
+
+        if not os.path.isdir(self.repoStore):
+            os.mkdir(self.repoStore)
 
         self.updateList()
 
@@ -278,56 +284,112 @@ class MyPrompt(Cmd):
                 row.extend(item[1].values())
                 w.writerow(row)
 
-    def do_match(self, args):
-        """search for matches in a target repo"""
-        self.detectKnownAuthors(args)
 
-    def detectKnownAuthors(self, targetRepo, maxFP=.1, n_est = 300):
-        """Given a target repo, attempt to identify any code in said repo written by any author in the active gps. Will set ROC point such that FPR <= maxFP"""
+    def do_detectAuthor(self, args):
+        """Given an Author name, attempt to identify any code in active repo written by any author in the active gps. Will set ROC point such that FPR <= maxFP"""
         
-        #cross validate, generating a two lists:
-            #(success: bool)
-            #(confidence: num)
-
-        if not self.activegps.featuresDetected:     #get features of currently active repo
-            self.activegps.getFeatures()
-            self.do_save("")
-
-        if self.activegps.featuresSelected is None:
-            self.activegps.featureSelect()
-            self.do_save("")
-
-        success, confidence = self.determineConfidence(self.activegps.featuresSelected, self.activegps.target)    #determine confidence of resolved classifier
-
-        decisionPoint = self.decisionMaximizationProcedure(success, confidence)
-
-
-        try:
-            targetgps = self.loadGPSFromFile(targetRepo)
-        except FileNotFoundError:
-            print("Target GPS not found. Compile it first.")
-            return
+        self.detectAuthor(self.do_getGPSForAuthor(args), self.activegps)
         
-        if not targetgps.featuresDetected():
-            targetgps.getFeatures()
-        
-        #train a classifier on entire self dataset
 
-        clf = RandomForestClassifier(n_estimators=n_est, max_features="sqrt")
-        
-        clf.fit(self.activegps.featuresSelected, self.activegps.targets)
-
-        pred = clf.predict_proba(targetgps.counts[:,self.activegps.selectedIndeces])  # get matrix of class probabilities
-
-        for sample, target in zip(pred, targetgps.target):
-                predIndex = np.argmax(sample)
-                prediction = clf.classes_[predIndex]  #get item with max probability
-                confidence = sample[predIndex]
-                success = prediction == target #record whether the result was correct
-
-                if confidence > decisionPoint:
-                    print("Match: "+ prediction+", "+target+", "+confidence)
     
+    def detectAuthor(self, authorGPS, gps):
+        if not gps.featuresDetected:     #get features of currently active repo
+            gps.getFeatures()
+            self.save(gps)
+
+        if not authorGPS.featuresDetected:
+            authorGPS.getFeatures()
+            self.save(authorGPS)
+
+        authorName = authorGPS.name #possibly unsafe?
+
+        authFeat = copy.deepcopy(authorGPS.counts)
+        authTargets = copy.deepcopy(authorGPS.target)
+
+        gpsFeat = copy.deepcopy(gps.counts)
+        gpsTargets = copy.deepcopy(gps.target)
+
+        targets = authTargets + gpsTargets
+
+        #THIS IS fucked up.
+        # A: shouldn't do cross val. I have separate test and training data
+        # B: How should I feature select if I assume the existing data is unlabled?
+
+        notCount = 0
+        authorCount = 0
+        for i in range(1, len(targets)):
+            if not targets[i] == authorName:
+                targets[i] = "not_"+authorName
+                notCount += 1
+            else:
+                authorCount += 1
+
+        import scipy
+        from sklearn.metrics import roc_curve, auc
+        import matplotlib.pyplot as plt
+
+        features = scipy.sparse.vstack(authFeat, gpsFeat)
+
+        features, terms = gitProfileSet.gitProfileSet.featureSelect(features, authorGPS.terms, targets)
+
+        clf = Classifier.Classifier().model
+        
+
+        cv = StratifiedKFold(n_splits=self.cfg["Feature Selection"]["n_splits"], shuffle=True)
+        tprs = []
+        aucs = []
+        mean_fpr = np.linspace(0, 1, 100)
+
+        i=0
+        
+        #Much of the code that follows is C+P from:
+        #https://scikit-learn.org/stable/auto_examples/model_selection/plot_roc_crossval.html#sphx-glr-auto-examples-model-selection-plot-roc-crossval-py
+        for train, test in cv.split(features, targets):
+
+            trFeatures = features[train]
+            trTarget = targets[train]
+
+            teFeatures = features[test]
+            teTarget = targets[test]
+   
+            predictions = clf.fit(trFeatures, trTarget).clf.predict_proba(teFeatures)
+            
+            fpr, tpr, thresholds = roc_curve(teTarget, predictions[:, 1])
+            tprs.append(scipy.interp(mean_fpr, fpr, tpr))
+            tprs[-1][0] = 0.0
+            roc_auc = auc(fpr, tpr)
+            aucs.append(roc_auc)
+            
+            plt.plot(fpr, tpr, lw=1, alpha=0.3,
+             label='ROC fold %d (AUC = %0.2f)' % (i, roc_auc))
+
+            i += 1
+        
+        plt.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r',
+            label='Chance', alpha=.8)
+
+        mean_tpr = np.mean(tprs, axis=0)
+        mean_tpr[-1] = 1.0
+        mean_auc = auc(mean_fpr, mean_tpr)
+        std_auc = np.std(aucs)
+        plt.plot(mean_fpr, mean_tpr, color='b',
+                label=r'Mean ROC (AUC = %0.2f $\pm$ %0.2f)' % (mean_auc, std_auc),
+                lw=2, alpha=.8)
+
+        std_tpr = np.std(tprs, axis=0)
+        tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+        tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+        plt.fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
+                        label=r'$\pm$ 1 std. dev.')
+
+        plt.xlim([-0.05, 1.05])
+        plt.ylim([-0.05, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver operating characteristic example')
+        plt.legend(loc="lower right")
+        plt.show()   
+
     def do_authorAuthTest(self, args):
         """Find precision and recall for given author in 2 class test"""
         if args == "":
@@ -397,12 +459,6 @@ class MyPrompt(Cmd):
 
     def do_getGPSAll(self, args):
         """get GPS of all repos of all authors in repo where possible. Type "skip" (or anything really) to skip commits to the active GPS"""
-        
-        if not args == '':
-            skip = map(lambda x: x.split("/")[-1], self.activegps.repos)
-        else:
-            skip = []
-        
         nGPS = gitProfileSet.gitProfileSet(self.activegps.name+"_complement")
         
         for author in tqdm(self.activegps.authors.values()):
@@ -410,24 +466,35 @@ class MyPrompt(Cmd):
             if os.path.isfile(authfile):
                 authGPS = self.loadGPSFromFile(authfile)
             else:
-                authGPS = author.getGPSofSelf(skip)
+                authGPS = author.getGPSofSelf(skip=self.activegps.repos)
                 self.save(authGPS, authfile) #write gps to disk, even if empty. This helps prevent unnecessary API requests
-            nGPS.authors.update(authGPS.authors)
+            for auth in authGPS.authors.values():
+                if len(auth.commits) > 0:
+                    nGPS.authors.update(authGPS.authors)
+                    break
 
         self.save(nGPS)
         
         print(str(len(nGPS.authors))+" authors found from "+str(len(self.activegps.authors))+" authors.")
 
     def do_getGPSForAuthor(self, args):
+        """Check Github for a matching author, then pull their content. 
+        If a file version exists, load it.
+        By default, the set gathered will skip over any content
+        that already exists in the active GPS ***unless loaded from an existing file***"""
 
-        try:
+        if args in self.activegps.authors:
             author = self.activegps.authors[args] 
-        except Exception:
-            print("Author not found in current set, making anew")
-            author = gitProfileSet.gitAuthor((args, ""))
-            #return
+            print("Author found in current set.")
+            return author.getGPSofSelf(skip = self.activegps.repos)
+            
+        if os.path.isfile(self.authorStore+"/"+args):
+            print("Saved author found. Loading...")
+            return self.loadGPSFromFile(self.authorStore+"/"+args)
         
-        self.save(author.getGPSofSelf())
+        print("No existing profile found. Creating a new one.")
+        author = gitProfileSet.gitAuthor((args, ''))
+        return author.getGPSofSelf()
 
     def do_featureDetect(self, args):
         self.activegps.getFeatures()
