@@ -1,6 +1,6 @@
 import pydriller
 import pandas as pd
-from gitProfileSet import commitType
+from commitType import commitType
 from loadRepos import clone_test_repos
 
 

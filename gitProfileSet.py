@@ -20,6 +20,8 @@ from scipy.sparse import hstack, vstack, csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_selection import mutual_info_classif, SelectKBest
 
+from commitType import commitType
+
 
 class gitProfileSet:
 
@@ -427,42 +429,4 @@ class gitAuthor:
 
         return gps
 
-from enum import Enum
-class commitType(Enum):
-    FEATURE = "FC"
-    BUGFIX = "BF"
-    REFACTOR = "RF"
-    OTHER = "OTH"
-
-    types = {FEATURE, BUGFIX, REFACTOR, OTHER}
-
-    def describe(self):
-        # self is the member here
-        return self.name, self.value
-
-    #TODO: User better heuristic
-    @staticmethod
-    def categorize(commit, langList=None):
-        added = 0
-        removed = 0
-        for mod in commit.modifications:
-            if mod.new_path is None or (langList is not None and mod.new_path.split(".")[-1] not in langList):
-                continue
-            #mod._calculate_metrics()
-            added += mod.added
-            removed += mod.removed
-
-        if added == 0:
-            return commitType.OTHER
-
-        if added-removed < .1*added:
-            if added < 20:
-                return commitType.BUGFIX
-            else:
-                return commitType.REFACTOR
-
-        if added > 20:
-            return commitType.FEATURE
-
-        return commitType.OTHER
 
