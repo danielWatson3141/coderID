@@ -103,25 +103,6 @@ class MyPrompt(Cmd):
         file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
         return pickle.Unpickler(file).load() 
 
-    def do_getGPSForAuthor(self, args):
-
-        try:
-            author = self.activegps.authors[args] 
-        except Exception:
-            print("Author not found")
-
-        self.save(author.getGPSofSelf())
-
-    def do_getGPSForEmail(self, args):
-        dev = object()
-        dev.name = args.split("@")[0]
-        dev.email = args
-
-        tempAuthor = gitProfileSet.gitAuthor(dev)
-        return tempAuthor.getGPSofSelf()
-           
-
-    
     def do_ls(self, args):
         """List all available profile sets"""
         for gpsFile in self.gpsList:
@@ -140,6 +121,38 @@ class MyPrompt(Cmd):
                 break
             if args == "*":
                 os.remove(self.saveLocation+gpsFile)
+
+    def do_getMasterAuthorList(self, args):
+        """writes all authors in all currently mined repos to args.csv"""
+        authors = []
+        for savedSet in os.listdir(self.saveLocation):
+            gps = self.loadGPSFromFile(savedSet)
+            for author in gps.authors.values():
+                authors.append([author.name, author.email])
+        
+        
+            with open(self.resultLocation+args+".csv", 'w+') as csvfile:
+                writer = csv.writer(csvfile, delimiter=',',
+                                quotechar='|', quoting=csv.QUOTE_MINIMAL)
+                for author in authors:
+                    writer.writerow(author)
+
+
+    def do_getGPSForAuthor(self, args):
+        try:
+            author = self.activegps.authors[args] 
+        except Exception:
+            print("Author not found")
+
+        self.save(author.getGPSofSelf())
+
+    def do_getGPSForEmail(self, args):
+        dev = object()
+        dev.name = args.split("@")[0]
+        dev.email = args
+
+        tempAuthor = gitProfileSet.gitAuthor(dev)
+        return tempAuthor.getGPSofSelf()
 
     def do_mineDirectory(self, directory):
         """Mine all repos in directory and save the output"""
