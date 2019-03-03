@@ -1,5 +1,6 @@
 import pydriller
 import pandas as pd
+from sklearn.metrics import classification_report
 from commitType import commitType
 from loadRepos import clone_test_repos
 
@@ -79,6 +80,18 @@ def get_labelled_examples():
     survey_df["project_id"] = commit_df["project_id"]
     return survey_df
 
+def get_true_label(row):
+    if (row['hl_forward'] == 1):
+        return 'FC'
+    elif (row['hl_forward'] == 0 and row['hl_corrective'] == 1):
+        return 'BF'
+    elif (row['hl_forward'] == 0 and
+          row['hl_corrective'] == 0 and
+          (row['hl_reengineering'] == 1 or
+           row['hl_management'] == 1)):
+          return 'RF'
+    return 'OTH'
+
 
 def test_classifications(survey_df, labelled_df):
     classified_df = pd.merge(survey_df, labelled_df, on=['commit_hash'])
@@ -116,6 +129,14 @@ def test_classifications(survey_df, labelled_df):
     total_correct = num_forward + num_bugfix + num_refactor + num_other
     total_rows = len(classified_df.index)
     print("accuracy: {}".format(total_correct / total_rows))
+
+    # precision and recall
+    classified_df['true_label'] = classified_df.apply(lambda row: get_true_label(row), axis=1)
+    metrics = classification_report(
+        classified_df['true_label'],
+        classified_df['label'],
+    )
+    print(metrics)
 
 
 def test_heuristic_function():
