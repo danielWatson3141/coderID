@@ -159,11 +159,14 @@ class gitProfileSet:
                 try:
                     tu = PPTools.Tokenize.get_tu(fn_str)
                     tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
-                    token_text = PPTools.Tokenize.tokensToText(tokens)
+                    inputs.append(PPTools.Tokenize.tokensToText(tokens))
+                    # still breaking in certain situations (e.g. some case statements)
+                    """
+                    token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True) # can't use this for inputs, but need to ignore comments for AST features
                     inputs.append(token_text)  # Convert to text
 
                     token_text = token_text.split(" ")
-
+                    
                     ast_feature_ext = ASTFeatureExtractor.ASTFeatures(token_text)
                     ast_feature_ext.traverse()
 
@@ -172,6 +175,7 @@ class gitProfileSet:
                     #code_unigrams.append(" ".join(tree.code_unigrams))
                     del ast_feature_ext
                     del token_text
+                    """
 
                 except Exception:
                     continue

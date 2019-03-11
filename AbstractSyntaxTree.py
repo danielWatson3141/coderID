@@ -55,7 +55,8 @@ class ASTree:
         matches = {
             ")": "(",
             "}": "{",
-            "]": "["
+            "]": "[",
+            "break": "start"
         }
         return matches[end]
 
@@ -70,6 +71,7 @@ class ASTree:
         base_data_type_seen = deque()  # using a stack to account for multi-word base return types, e.g. long int
         node_stack = deque() # tracking statements in the function body
         temp_stack = deque()
+        case_stack = deque() # tracking cases seen
 
         prev_token = ""
 
@@ -103,9 +105,12 @@ class ASTree:
             elif curr_parent_type == "Argument-List":
                 if token == ")": # end of argument list
                     # TODO: custom data types/pointers/references need to be accounted for string join?
-                    tmp_node = Node("Argument", temp_stack.pop(), temp_stack.pop())
-                    curr_parent_node.add_child(tmp_node)
-                    decl.add_child(curr_parent_node)
+                    try:
+                        tmp_node = Node("Argument", temp_stack.pop(), temp_stack.pop())
+                        curr_parent_node.add_child(tmp_node)
+                        decl.add_child(curr_parent_node)
+                    except: # no valid arguments, e.g. fn_name(void)
+                        pass
 
                     curr_parent_type = "" # reset the parent node
                     curr_parent_node = None
@@ -131,16 +136,19 @@ class ASTree:
                     node_stack.append(Node("While-Statement"))
                 elif token == "for":
                     node_stack.append(Node("For-Statement"))
-                elif token == "return":
-                    node_stack.append(Node("Return-Statement"))
-                elif token == "break":
-                    node_stack.append(Node("Break-Statement"))
                 elif token == "continue":
                     node_stack.append(Node("Continue-Statement"))
                 elif token == "goto":
                     node_stack.append(Node("Goto-Statement"))
+                elif token == "switch":
+                    node_stack.append(Node("Switch-Statement"))
+                elif token == "case": # case statements are not always terminated with a jump statement. How to account for this?
+                    node_stack.append(Node("Case-Statement"))
+                    node_stack.append("start") # need to find break
+                    case_stack.append(True)
                 elif token == "{": # contents of branching statements
                     node_stack.append(token)
+
                 elif token == "}":
                     opening = self.get_matching(token)
                     children = []
@@ -154,6 +162,25 @@ class ASTree:
                             else:  # end of function
                                 fn_body.children += children # top-level statements are the function body children
                             break
+                        else:
+                            children.append(tmp)
+
+                elif token == "return":
+                    node_stack.append(Node("Return-Statement"))
+
+                elif token == "break":
+                    node_stack.append(Node("Break-Statement"))
+                    if len(case_stack) == 0: # did not encounter a case statement before this
+                        continue
+                    case_stack.pop()
+                    opening = self.get_matching(token)
+                    children = []
+                    while True:
+                        tmp = node_stack.pop()
+                        if tmp == opening:
+                            parent_node = node_stack.pop()
+                            parent_node.children += children
+                            node_stack.append(parent_node)
                         else:
                             children.append(tmp)
 
@@ -173,13 +200,16 @@ class ASTree:
         self.head.add_child(decl)
         self.head.add_child(fn_body)
 
-"""
+
 if __name__ == "__main__":
-    file = "test3.cpp"
+    file = "test.cpp"
     tu_str = PPTools.Tokenize.tokenize(file)
+    print(PPTools.Tokenize.tokensToText(tu_str))
+    """
     tree = ASTree()
     tokenStrings = PPTools.Tokenize.tokensToText(tu_str).split(" ")
     tree.lexer(tokenStrings)
     print("Node Type | Spelling | Data Type")
     tree.traverse(tree.head)
-"""
+    """
+

@@ -153,8 +153,11 @@ class Tokenize:
         return tu.get_tokens(extent=tu.cursor.extent)    
         
     @staticmethod
-    def tokensToText(tokens):
-        tokenStrings = map(lambda x: Tokenize.trainingRepresentative(x), tokens)
+    def tokensToText(tokens, ignore_comments = False):
+        tokens_to_process = tokens
+        if ignore_comments:
+            tokens_to_process = list([x for x in tokens if str(x.kind) != "TokenKind.COMMENT"])
+        tokenStrings = map(lambda x: Tokenize.trainingRepresentative(x), tokens_to_process)
         return " ".join(tokenStrings)
 
     @staticmethod
