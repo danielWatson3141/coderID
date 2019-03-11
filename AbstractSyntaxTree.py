@@ -60,7 +60,7 @@ class ASTree:
         }
         return matches[end]
 
-
+    # TODO: need to rename to parser since function definition has changed
     def lexer(self, tokens):
         decl= Node(node_type="Declarator")
         fn_body = Node(node_type="Function-Body")
@@ -89,10 +89,14 @@ class ASTree:
             if curr_parent_type == "Declaration-Specifiers":
                 if self.is_decl_specifier(token):
                     curr_parent_node.add_child(Node("Decl-Specifier", spelling=token))
-                elif token == "(": # start of the argument list
-                    # set function details
-                    self.head.set_spelling(temp_stack.pop())
-                    self.head.set_data_type(temp_stack.pop())
+                elif token == "(" and self.head.spelling == "": # start of the argument list
+                    try:
+                        # set function details
+                        self.head.set_spelling(temp_stack.pop())
+                        self.head.set_data_type(temp_stack.pop())
+                    except:
+                        # can't be a function
+                        return
 
                     decl.add_child(curr_parent_node)  # no more declaration specifiers
                     curr_parent_type = "Argument-List"
@@ -142,12 +146,34 @@ class ASTree:
                     node_stack.append(Node("Goto-Statement"))
                 elif token == "switch":
                     node_stack.append(Node("Switch-Statement"))
-                elif token == "case": # case statements are not always terminated with a jump statement. How to account for this?
-                    node_stack.append(Node("Case-Statement"))
-                    node_stack.append("start") # need to find break
-                    case_stack.append(True)
+                elif token == "return":
+                    node_stack.append(Node("Return-Statement"))
+                elif token == "break":
+                    node_stack.append(Node("Break-Statement"))
+                elif token == "try":
+                    node_stack.append(Node("Try-Statement"))
+                elif token == "catch":
+                    node_stack.append(Node("Catch-Statement"))
                 elif token == "{": # contents of branching statements
                     node_stack.append(token)
+
+                elif token == "case" or (token == "default" and len(case_stack) > 0):
+                    if len(case_stack) > 0: # did not encounter a case statement before this
+                        case_stack.pop()
+                        opening = "start"
+                        children = []
+                        while True:
+                            tmp = node_stack.pop()
+                            if tmp == opening:
+                                parent_node = node_stack.pop()
+                                parent_node.children += children
+                                node_stack.append(parent_node)
+                                break
+                            else:
+                                children.append(tmp)
+                    node_stack.append(Node("Case-Statement"))
+                    node_stack.append("start")
+                    case_stack.append(True)
 
                 elif token == "}":
                     opening = self.get_matching(token)
@@ -158,27 +184,16 @@ class ASTree:
                             if len(node_stack) > 0:  # not the function closing bracket
                                 parent_node = node_stack.pop()
                                 parent_node.children += children
+                                if parent_node.type == "Catch-Statement": # catch statements are children of the original try statement
+                                    try_node = node_stack.pop()
+                                    try_node.add_child(parent_node)
+                                    parent_node = try_node
                                 node_stack.append(parent_node)
                             else:  # end of function
                                 fn_body.children += children # top-level statements are the function body children
                             break
-                        else:
-                            children.append(tmp)
-
-                elif token == "return":
-                    node_stack.append(Node("Return-Statement"))
-
-                elif token == "break":
-                    node_stack.append(Node("Break-Statement"))
-                    if len(case_stack) == 0: # did not encounter a case statement before this
-                        continue
-                    case_stack.pop()
-                    opening = self.get_matching(token)
-                    children = []
-                    while True:
-                        tmp = node_stack.pop()
-                        if tmp == opening:
-                            parent_node = node_stack.pop()
+                        elif tmp == "start":
+                            parent_node = node_stack.pop() # the last case statement in a switch-case statement
                             parent_node.children += children
                             node_stack.append(parent_node)
                         else:
@@ -198,7 +213,8 @@ class ASTree:
             prev_token = token
 
         self.head.add_child(decl)
-        self.head.add_child(fn_body)
+        if len(fn_body.children) > 0:
+            self.head.add_child(fn_body)
 
 
 if __name__ == "__main__":

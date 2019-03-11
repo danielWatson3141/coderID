@@ -141,7 +141,8 @@ class gitProfileSet:
         charLevelFeatures = None
         tokfeatureNames = featureExtractors.featureExtractors.tokfeatureNames
         tokFeatures = None
-
+        fns_seens = 0
+        fns_failed = 0
         print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
         for author in tqdm(self.authors.values()):
@@ -157,11 +158,13 @@ class gitProfileSet:
                     continue
 
                 try:
+                    fns_seens += 1
                     tu = PPTools.Tokenize.get_tu(fn_str)
                     tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
                     inputs.append(PPTools.Tokenize.tokensToText(tokens))
-                    # still breaking in certain situations (e.g. some case statements)
+
                     """
+                    # getting the token pointer-related errors; comment out for now
                     token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True) # can't use this for inputs, but need to ignore comments for AST features
                     inputs.append(token_text)  # Convert to text
 
@@ -169,16 +172,14 @@ class gitProfileSet:
                     
                     ast_feature_ext = ASTFeatureExtractor.ASTFeatures(token_text)
                     ast_feature_ext.traverse()
-
-                    # TODO: concatenate in the featureExtractor module or here?
                     node_types.append(" ".join(ast_feature_ext.node_types))
-                    #code_unigrams.append(" ".join(tree.code_unigrams))
-                    del ast_feature_ext
-                    del token_text
                     """
 
-                except Exception:
+
+                except Exception as e:
+                    fns_failed += 1
                     continue
+
 
                 """
                 Bigram matrix:
@@ -202,7 +203,7 @@ class gitProfileSet:
                 del tokens
             
         inputs = np.array(inputs)
-
+        print(100 * fns_failed / fns_seens)
         # TODO: abstract this out since it gets used a lot.
         print("Vectorizing...")
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
@@ -211,7 +212,8 @@ class gitProfileSet:
                                         decode_error="ignore", lowercase=False,
                                         use_idf=False)
 
-        self.counts = hstack([charLevelFeatures, tokFeatures], format = 'csr')
+        #self.counts = hstack([charLevelFeatures, tokFeatures], format = 'csr')
+        self.counts = charLevelFeatures
         self.terms = charfeatureNames #+ tokfeatureNames
 
         need_tf = False
