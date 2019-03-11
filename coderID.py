@@ -161,10 +161,12 @@ class MyPrompt(Cmd):
             print("Not a directory!")
             return
 
-        for subdir in os.listdir(directory):
-            self.do_new(subdir)
-            self.do_loadGit(directory+"/"+subdir)
-            self.do_compile("")
+        if subdir not in self.gpsList:
+                self.do_new(subdir)
+                self.do_loadGit(directory+"/"+subdir)
+                self.do_mineRepos("")
+            else:
+                print("Skipping "+subdir+"As it is already found")
         
     def do_quit(self, args):
         """quits the program WITHOUT SAVING"""
