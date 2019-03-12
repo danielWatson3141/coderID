@@ -242,7 +242,7 @@ class MyPrompt(Cmd):
             header.extend(oneSample.keys())
             print(header)
             w.writerow(header)
-        #make classification report
+            #make classification report
             for authorName, result in results.items():
                 result = result[authorName]
                 row = [authorName]+[value for key, value in result.items()]
@@ -257,18 +257,6 @@ class MyPrompt(Cmd):
             print("Needs an author parameter")
 
         print(self.twoClassTest(args))
-
-    def do_allAuthTest(self, args, mindocs = 30):
-        output = dict()
-        for authorName, author in tqdm(self.activegps.authors.items()):
-            if len(author.functions) > mindocs:
-                result = self.twoClassTest(authorName, dictOutput=True)
-                precision = result[authorName]["precision"]
-                recall = result[authorName]["recall"]
-                output.update({authorName:(precision, recall)})
-
-        for result in output.items():
-            print(result)
 
     def twoClassTest(self, author, splits = 5, dictOutput=False):
         
@@ -343,86 +331,6 @@ class MyPrompt(Cmd):
             redF = .7    
         self.activegps.featureSelect(redF)
         self.do_save()
-    
-    def decisionMaximizationProcedure(self, success:np.array, confidence:np.array, maxFP=.1, precision = .01):
-        """return the highest d such that P(success| confidence > d) >= 1-maxFP"""
-
-        if len(success) != len(confidence):
-            raise Exception("success and confidence vectors must be equal in length")
-
-        corclass = confidence[success]      #Confidence in correct instances
-        misclass = confidence[not success]  #Confidence in incorrect instances
-
-        totalCount = len(success)
-        
-        #If misclassification rate is less than maximum false positive rate then the optimal cut-off is is the minimum of the correct instances
-        if len(misclass) < maxFP*totalCount:
-            return min(corclass)
-        
-
-        upper = 1
-        lower = 0
-        d = .5
-        fp = 1
-
-        maxIter = 10
-        iterCount = 0   #Don't iterate more than ten times. Necessary to prevent infinite loop on small datasets
-
-        while (fp > maxFP+precision or fp < maxFP-precision) and iterCount < maxIter:
-
-            
-            iterCount += 1
-
-            d = (upper+lower)/2
-            
-            fp = len(np.where(misclass>d))/totalCount   #fp rate with d at its current value
-
-            print("d: "+d+" "+"fp: "+fp)
-            
-            if fp < maxFP:
-                upper = d
-            else:
-                lower = d
-
-        if iterCount == 10:
-            print("terminated after 10 iterations. This is problematic.")
-        return d
-
-        
-    def determineConfidence(self, features, targets, n_est = 300):
-        """Cross validate over the given data and return the scores"""
-        print("Cross Validating...")
-        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
-        numSamples = features.shape[0]
-        train_size=min(1000 ,  numSamples* .5)
-        test_size=min(200 ,  numSamples* .2)
-        splits = 3
-
-        cv = StratifiedKFold(n_splits=splits)
-        
-        success = np.empty((test_size*splits))
-        confidence = np.empty((test_size*splits))
-        index = 0
-
-        for train, test in cv.split(np.zeros(len(targets)), targets):
-            
-            trainingSet = (features[train], targets[train]) #Select training set
-
-            clf.fit(trainingSet[0], trainingSet[1])         #train model
-
-            testSet = (features[test], targets[test])       #Select test set
-
-            probabilities = clf.predict_proba(testSet[0])   #predict probabilities over test set
-            
-            for sample, target in zip(probabilities, testSet[1]):
-                predIndex = np.argmax(sample)
-                prediction = clf.classes_[predIndex]  #get item with max probability
-
-                success[index] = prediction == target #record whether the result was correct
-                confidence[index] = sample[predIndex] #record the confidence of the result
-                index += 1
-
-        return (success, confidence)
 
     def do_authorsInCommon(self, args):
         for file1 in os.listdir(self.saveLocation):
@@ -492,11 +400,6 @@ class MyPrompt(Cmd):
         """Displays all authors found in the currently loaded git repos"""
         self.activegps.displayAuthors()
         #print(self.activegps)
-
-    def do_setOption(self, args):
-        """This method should take args option , value. Not implemented yet, check config issue on Github."""
-        pass
-
 
     def do_loadGitRepos(self, args):
         """Loads a directory args[0] of git repos, as many as args[1] def:inf"""
@@ -614,36 +517,6 @@ class MyPrompt(Cmd):
                 if tempdir != None:
                     shutil.copytree(tempdir+repoDirName, outputDir+"/"+repoDirName)
                     shutil.rmtree(tempdir+repoDirName)
-
-    def sanityCheck(self, features, targets, model, numAuthors):
-
-        from sklearn import metrics,utils
-
-        n_samples = len(targets)
-       
-        features, targets = utils.shuffle(features, targets)
-        expected = targets[n_samples //2:]
-        # Test here
-        model.fit(features[:n_samples//2], targets[:n_samples//2])
-        predictions = model.predict(features[n_samples//2:])
-
-        cm = metrics.confusion_matrix(expected, predictions)
-        sortedAuthors = sorted(self.activegps.authors.keys(), reverse=False)
-        authCount = numAuthors
-        if numAuthors == -1:
-            authCount = len(sortedAuthors)
-        #assert len(sortedAuthors) == cm.shape[0]
-        """
-        for i in range(0, authCount):
-            print(sortedAuthors[i]+": P="+str(cm[i,i]/sum(cm[i]))+" R="+str(cm[i,i]/sum(cm[:,i])))
-        """
-        from sklearn.metrics import classification_report
-        print(classification_report(expected, predictions))
-
-        #import numpy
-        #numpy.set_printoptions(threshold='nan')
-        
-        print("Confusion matrix:\n%s" % cm)
 
     @staticmethod
     def bestNFeatures(imp, names, n):

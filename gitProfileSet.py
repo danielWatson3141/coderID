@@ -340,17 +340,6 @@ class gitProfileSet:
 
         return (strength, importances)
 
-    def testProgrammerTransparency (self, authors = None):
-        results = dict()
-        #{name: (pr, re, f1)}
-        if authors == None:
-            authors = [author.name for author in self.authors]
-
-        for author in authors:
-            results.update({author: 0})
-
-        return results
-        
     def functionToString(self, lines):
         textLines = list(len(lines))
 
