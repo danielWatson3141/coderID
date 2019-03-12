@@ -2,26 +2,28 @@ import sys
 import warnings
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
-
+from cmd import Cmd
 import sys
 import pickle
 import os
+import zipfile
+import string
+import gitProfileSet
+import ProfileSet
+import testCommitClassification
 import copy
 import numpy as np
-from cmd import Cmd
-from tqdm import tqdm
-
-from sklearn import utils
-from sklearn.metrics import classification_report
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import StratifiedKFold
-
-import PPTools
-import PromptTools
+import csv
 import Classifier
-import ProfileSet
-import gitProfileSet
-import testCommitClassification
+import PPTools
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_val_score,ShuffleSplit, StratifiedKFold
+from sklearn import metrics, utils
+from sklearn.metrics import classification_report
+
+
+
+from tqdm import tqdm
 
 class MyPrompt(Cmd):
 
@@ -88,7 +90,7 @@ class MyPrompt(Cmd):
         if(args == ""):
             print("Error, must supply name of existing gps. Use 'new' to start a fresh one.")
         self.activegps = self.load(args)
-        self.prompt = self.activegps.name
+        self.prompt = self.activegps.name+">"
 
     def load(self, gpsName):
         for gpsFile in self.gpsList:
@@ -100,23 +102,6 @@ class MyPrompt(Cmd):
     def loadGPSFromFile(self, fileName):
         file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
         return pickle.Unpickler(file).load() 
-
-    def do_getGPSForAuthor(self, args):
-
-        try:
-            author = self.activegps.authors[args] 
-        except Exception:
-            print("Author not found")
-
-        self.save(author.getGPSofSelf())
-
-    def do_getGPSForEmail(self, args):
-        dev = object()
-        dev.name = args.split("@")[0]
-        dev.email = args
-
-        tempAuthor = gitProfileSet.gitAuthor(dev)
-        return tempAuthor.getGPSofSelf()
 
     def do_ls(self, args):
         """List all available profile sets"""
@@ -137,6 +122,38 @@ class MyPrompt(Cmd):
             if args == "*":
                 os.remove(self.saveLocation+gpsFile)
 
+    def do_getMasterAuthorList(self, args):
+        """writes all authors in all currently mined repos to args.csv"""
+        authors = []
+        for savedSet in os.listdir(self.saveLocation):
+            gps = self.loadGPSFromFile(savedSet)
+            for author in gps.authors.values():
+                authors.append([author.name, author.email])
+        
+        
+            with open(self.resultLocation+args+".csv", 'w+') as csvfile:
+                writer = csv.writer(csvfile, delimiter=',',
+                                quotechar='|', quoting=csv.QUOTE_MINIMAL)
+                for author in authors:
+                    writer.writerow(author)
+
+
+    def do_getGPSForAuthor(self, args):
+        try:
+            author = self.activegps.authors[args] 
+        except Exception:
+            print("Author not found")
+
+        self.save(author.getGPSofSelf())
+
+    def do_getGPSForEmail(self, args):
+        dev = object()
+        dev.name = args.split("@")[0]
+        dev.email = args
+
+        tempAuthor = gitProfileSet.gitAuthor(dev)
+        return tempAuthor.getGPSofSelf()
+
     def do_mineDirectory(self, directory):
         """Mine all repos in directory and save the output"""
 
@@ -145,107 +162,95 @@ class MyPrompt(Cmd):
             return
 
         for subdir in os.listdir(directory):
-            self.do_new(subdir)
-            self.do_loadGit(directory+"/"+subdir)
-            self.do_compile("")
+            if subdir not in self.gpsList:
+                self.do_new(subdir)
+                self.do_loadGit(directory+"/"+subdir)
+                self.do_compile("")
+            else:
+                print("Skipping "+subdir+" as it is already found")
         
     def do_quit(self, args):
         """quits the program WITHOUT SAVING"""
         print("Quitting.")
         raise SystemExit
 
-    def do_selectModel(self, args):
-        """
-        Select the classifier to use on the dataset.
-        """
-        PPTools.Config.update('Model', 'model_name', args.strip())
 
     def do_classifyFunctions(self, args):
         """Cross validate over functions committed by authors
          in all repos. This will give misleading results 
          unless multiple projects are analyzed"""
 
-        """Builds and evaluates a classifier for the chosen authors and features"""
+        """Builds and evaluates a Random Forest classifier for the chosen authors and features"""
 
         expName = self.activegps.name
-        if len(args) == 1:
-            expName = args.strip()
+       
+        if len(args) > 0:
+            expName = args[0]
 
         if not self.activegps.featuresDetected:
             print("Running Feature Detection")
             self.activegps.getFeatures()
+            self.activegps.featuresSelected = None
+            self.do_save()
 
         if self.activegps.featuresSelected is None:
             self.activegps.featureSelect()
+            self.do_save()
 
-        print("Generating CM")
+        print("Generating Class Report")
         n_samples = len(self.activegps.target)
+        #clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
         clf = Classifier.Classifier()
 
-        #shuffle the dataset
-        features, targets = utils.shuffle(self.activegps.featuresSelected, self.activegps.target)
-        
-        #fit the model to the first 2/3 of the samples
-        train_size = int(np.floor(n_samples * clf.train_size))
-        clf.model.fit(features[:train_size], targets[:train_size])
-        
-        #predict the last 1/3 of the data
-        predictions = clf.model.predict(features[train_size:])
-        expected = targets[train_size:]
+        results = dict()
+        for authorName in tqdm(self.activegps.authors):
+            results.update(
+                {authorName:
+                    self.twoClassTest(authorName, splits = 3, dictOutput=True)
+                }
+            )
 
-        # save the results to CSV files in the result location
-        PromptTools.save_results(clf, self.activegps, expName, self.resultLocation, expected, predictions)
+        import csv
 
-
-    def do_match(self, args):
-        """search for matches in a target repo"""
-        self.detectKnownAuthors(args)
-
-    def detectKnownAuthors(self, targetRepo, maxFP=.1, n_est = 300):
-        """Given a target repo, attempt to identify any code in said repo written by any author in the gps. Will set ROC point such that FPR <= maxFP"""
-        
-        #cross validate, generating a two lists:
-            #(success: bool)
-            #(confidence: num)
-
-        if not self.activegps.featuresDetected:     #get features of currently active repo
-            self.activegps.getFeatures()
-            self.do_save("")
-
-        if self.activegps.featuresSelected is None:
-            self.activegps.featureSelect()
-            self.do_save("")
-
-        success, confidence = self.determineConfidence(self.activegps.featuresSelected, self.activegps.target)    #determine confidence of resolved classifier
-
-        decisionPoint = self.decisionMaximizationProcedure(success, confidence)
-
-
+        # Create csv target directory if non-existent
         try:
-            targetgps = self.loadGPSFromFile(targetRepo)
-        except FileNotFoundError:
-            print("Target GPS not found. Compile it first.")
-            return
-        
-        if not targetgps.featuresDetected():
-            targetgps.getFeatures()
-        
-        #train a classifier on entire self dataset
-        clf = RandomForestClassifier(n_estimators=n_est, max_features="sqrt")
-        
-        clf.fit(self.activegps.featuresSelected, self.activegps.targets)
+            os.mkdir(self.resultLocation)
+            print("CSV Directory ", self.resultLocation, " Created.")
+        except FileExistsError:
+            pass
 
-        pred = clf.predict_proba(targetgps.counts[:,self.activegps.selectedIndeces])  # get matrix of class probabilities
+        if clf.model_name == 'random_forest':
+            #Compute OOB score
+            print("OOB score: "+str(clf.model.oob_score_))
+        
+            #Compute best 50 features
+            best = self.bestNFeatures(clf.model.feature_importances_, self.activegps.terms, 50)
 
-        for sample, target in zip(pred, targetgps.target):
-                predIndex = np.argmax(sample)
-                prediction = clf.classes_[predIndex]  #get item with max probability
-                confidence = sample[predIndex]
-                success = prediction == target #record whether the result was correct
+            #write best features
+            with open(self.resultLocation+expName+"_best_features.csv", 'w+') as csvfile:
+                writer = csv.writer(csvfile, delimiter=',',
+                                quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
-                if confidence > decisionPoint:
-                    print("Match: "+ prediction+", "+target+", "+confidence)
-    
+                for item in best:
+                    writer.writerow(item)
+
+        with open(self.resultLocation+expName+"_report.csv", 'w+') as reportFile:
+            w = csv.writer(reportFile)
+            oneReport = list(results.items())[0]
+            oneSample = oneReport[1][oneReport[0]]
+            header = ["Author"]
+            header.extend(oneSample.keys())
+            print(header)
+            w.writerow(header)
+        #make classification report
+            for authorName, result in results.items():
+                result = result[authorName]
+                row = [authorName]+[value for key, value in result.items()]
+                print(row)
+                w.writerow
+            
+            #write classification report
+   
     def do_authorAuthTest(self, args):
         """Find precision and recall for given author in 2 class test"""
         if args == "":
@@ -276,19 +281,24 @@ class MyPrompt(Cmd):
             gps.getFeatures()
         
         features = copy.deepcopy(gps.counts)
-        targets = copy.deepcopy(gps.target)
-
+        #targets = copy.deepcopy(gps.target)
+        targets = list()
         
         authorCount = 0
         notCount = 0
-        for i in range(1, len(targets)):
-            if not targets[i] == author:
-                targets[i] = "not_"+author
+        for authorName in gps.target:
+            if not authorName == author:
+                targets.append("not_"+author)
                 notCount += 1
             else:
+                targets.append(author)
                 authorCount += 1
 
+        
 
+        targets = np.array(targets)
+
+        #TODO:update to match modularity changes
         clf = RandomForestClassifier(n_estimators=600, oob_score=True, max_features="sqrt", class_weight={author:5, "not_"+author:1})
         
         #cross validate for prec and rec
@@ -296,6 +306,7 @@ class MyPrompt(Cmd):
         cv = StratifiedKFold(n_splits=splits, shuffle=True)
         pred = []
         tar = []
+        conf = []
         #print("Cross Validating")
         for train, test in cv.split(features, targets):
 
@@ -309,8 +320,17 @@ class MyPrompt(Cmd):
 
             pred.extend(clf.predict(teFeatures))
             tar.extend(teTarget)
+            conf.extend([prob[0] for prob in clf.predict_proba(teFeatures)])
 
-        return classification_report(pred, tar, output_dict=dictOutput)
+        from sklearn.metrics import auc, roc_curve
+        
+        fpr, tpr, thresholds = roc_curve(tar, conf, pos_label=author)
+        auc = auc(fpr, tpr)
+        
+        report = classification_report(pred, tar, output_dict=dictOutput)
+        report[author]["AUC"] = auc
+        
+        return report
 
     def do_featureDetect(self, args):
         self.activegps.getFeatures()
@@ -409,15 +429,18 @@ class MyPrompt(Cmd):
             for file2 in os.listdir(self.saveLocation):
                 if file1 == file2:
                     break
-                gps1 = PromptTools.loadGPSFromFile(file1)
-                gps2 = PromptTools.loadGPSFromFile(file2)
-                inCommon = PromptTools.authorsInCommon(gps1, gps2)
+                gps1 = self.loadGPSFromFile(file1)
+                gps2 = self.loadGPSFromFile(file2)
+                inCommon = self.authorsInCommon(gps1, gps2)
                 
                 if inCommon: #if not empty
                     print(file1+", "+file2+": "+str(inCommon))
 
+
+
     def authorsInCommon(self, gps1, gps2):
         return [author for author in gps1.authors.keys() if author in gps2.authors]
+        
 
     def do_pruneGit(self, args):
         """Limit to N authors with between k and m functions. 0 for unlimited"""
@@ -592,6 +615,43 @@ class MyPrompt(Cmd):
                     shutil.copytree(tempdir+repoDirName, outputDir+"/"+repoDirName)
                     shutil.rmtree(tempdir+repoDirName)
 
+    def sanityCheck(self, features, targets, model, numAuthors):
+
+        from sklearn import metrics,utils
+
+        n_samples = len(targets)
+       
+        features, targets = utils.shuffle(features, targets)
+        expected = targets[n_samples //2:]
+        # Test here
+        model.fit(features[:n_samples//2], targets[:n_samples//2])
+        predictions = model.predict(features[n_samples//2:])
+
+        cm = metrics.confusion_matrix(expected, predictions)
+        sortedAuthors = sorted(self.activegps.authors.keys(), reverse=False)
+        authCount = numAuthors
+        if numAuthors == -1:
+            authCount = len(sortedAuthors)
+        #assert len(sortedAuthors) == cm.shape[0]
+        """
+        for i in range(0, authCount):
+            print(sortedAuthors[i]+": P="+str(cm[i,i]/sum(cm[i]))+" R="+str(cm[i,i]/sum(cm[:,i])))
+        """
+        from sklearn.metrics import classification_report
+        print(classification_report(expected, predictions))
+
+        #import numpy
+        #numpy.set_printoptions(threshold='nan')
+        
+        print("Confusion matrix:\n%s" % cm)
+
+    @staticmethod
+    def bestNFeatures(imp, names, n):
+        match = dict(zip(names, imp))
+        import operator
+        sortedMatch = sorted(match.items(), key=operator.itemgetter(1), reverse=True)
+        return sortedMatch[0:n]
+
     def do_gpsInfo(self, args):
         """print basic info about this gps"""
         print(self.activegps)
@@ -615,6 +675,7 @@ def get_memory():
     return free_memory
 
 if __name__ == '__main__':
+    
     #memory_limit() # Limitates maximun memory usage to 90%
     try:
         prompt = MyPrompt()

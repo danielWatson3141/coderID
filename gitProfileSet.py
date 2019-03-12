@@ -151,6 +151,7 @@ class gitProfileSet:
             authors_seen += 1
 
             for fun in author.functions:
+
                 fn_str = '\n'.join(fun.values())
 
                 #whitespace fn's still getting in. This will catch for that.
@@ -161,9 +162,9 @@ class gitProfileSet:
                     fns_seens += 1
                     tu = PPTools.Tokenize.get_tu(fn_str)
                     tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
-                    inputs.append(PPTools.Tokenize.tokensToText(tokens))
+                    # inputs.append(PPTools.Tokenize.tokensToText(tokens))
 
-                    """
+                    import copy
                     # getting the token pointer-related errors; comment out for now
                     token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True) # can't use this for inputs, but need to ignore comments for AST features
                     inputs.append(token_text)  # Convert to text
@@ -173,12 +174,11 @@ class gitProfileSet:
                     ast_feature_ext = ASTFeatureExtractor.ASTFeatures(token_text)
                     ast_feature_ext.traverse()
                     node_types.append(" ".join(ast_feature_ext.node_types))
-                    """
-
-
-                except Exception as e:
+                    
+                except Exception:
+                    node_types.append('')
                     fns_failed += 1
-                    continue
+                    #continue
 
 
                 """
@@ -208,9 +208,9 @@ class gitProfileSet:
         print("Vectorizing...")
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
                                        decode_error="ignore", lowercase=False)
-        vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S*",
-                                        decode_error="ignore", lowercase=False,
-                                        use_idf=False)
+        # vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S*",
+        #                                 decode_error="ignore", lowercase=False,
+        #                                 use_idf=False)
 
         #self.counts = hstack([charLevelFeatures, tokFeatures], format = 'csr')
         self.counts = charLevelFeatures
@@ -218,22 +218,14 @@ class gitProfileSet:
 
         need_tf = False
 
-        #i = 0
-        #for features in tqdm([inputs, node_types, code_unigrams]):
-        #    i += 1
-            # TFIDF
-        self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
-                                 format = 'csr')
-        self.terms += vectorizer.get_feature_names()
+        i = 0
+        for features in [inputs, node_types]:
+            i += 1
 
-            # Get only the term frequencies
-        # if need_tf:
-        #     self.counts = hstack([self.counts, vectorizer_tf.fit_transform(features)],
-        #                             format = 'csr')
-        #     self.terms += vectorizer_tf.get_feature_names()
-        # else:
-        #     # accounts for the fact that we do not need the TF of the unigrams/inputs
-        #     need_tf = True
+            self.counts = hstack([self.counts, vectorizer.fit_transform(features)],
+                                    format = 'csr')
+            self.terms += vectorizer.get_feature_names()
+        
 
         del inputs, node_types, code_unigrams
 
