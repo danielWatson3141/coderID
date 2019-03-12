@@ -167,7 +167,7 @@ class MyPrompt(Cmd):
                 self.do_loadGit(directory+"/"+subdir)
                 self.do_compile("")
             else:
-                print("Skipping "+subdir+" as it is already found")
+                print("Skipping "+subdir+" as it is already found.")
         
     def do_quit(self, args):
         """quits the program WITHOUT SAVING"""
