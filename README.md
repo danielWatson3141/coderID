@@ -4,6 +4,8 @@ This is a Python tool that provides a python module and command-line interface f
 
 This tool is under active development and is neither properly documented, nor entirely functional at this stage. We have attempted to document commands and functions in-line, but as the system is rapidly evolving, not all functionality is documented properly and not all components will work as intended.
 
+Type help into the prompt to get a list of available commands. Most of these are documented as well and a brief (and probably unhelpful) description of each command can be accessed via 'help <command>'.
+
 
 
 Setup
