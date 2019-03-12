@@ -10,9 +10,10 @@ class Classifier:
     def __init__(self):
         """
         :param model_name: String. the type of model that this classifier is.
-            Must be one of "random_forest", "logit", "linear_svm", "naive_bayes".
+            Must be one of "random_forest", "logit", "linear_svm".
         :return: a Classifier object.
         """
+        self.model = None
         self.model_name = PPTools.Config.config['Model']['model_name']
         self.train_size = PPTools.Config.get_value('Model', 'train_size')
 
@@ -26,15 +27,12 @@ class Classifier:
         elif self.model_name == "logit":
             self.model = LogisticRegression(**self.parameters)
 
-        elif self.model_name == "linear_svm":
+        elif self.model_name == "svm":
             self.model = LinearSVC(**self.parameters)
 
-        elif self.model_name == "naive_bayes":
-            self.model = MultinomialNB(**self.parameters)
-
         else:
-            assert(True, "Invalid model choice. Parameter model_name must be one " \
-                         "of 'random_forest', 'logit', 'svm', or 'naive_bayes'.")
+            assert(False), "Invalid model choice. Parameter model_name must be one " \
+                         "of 'random_forest', 'logit', or 'svm'."
 
 
     def preprocess(self, X):
@@ -56,4 +54,10 @@ class Classifier:
             PPTools.Config.update(self.model_name, param_name, value)
 
         self.model.set_params(**self.parameters)
+
+    def get_features(self):
+        if self.model_name == "random_forest":
+            return self.model.feature_importances_
+        else:
+            return self.model.coef_[0]
 

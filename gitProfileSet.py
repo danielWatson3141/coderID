@@ -141,7 +141,8 @@ class gitProfileSet:
         charLevelFeatures = None
         tokfeatureNames = featureExtractors.featureExtractors.tokfeatureNames
         tokFeatures = None
-
+        fns_seens = 0
+        fns_failed = 0
         print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
         for author in tqdm(self.authors.values()):
@@ -150,6 +151,7 @@ class gitProfileSet:
             authors_seen += 1
 
             for fun in author.functions:
+
                 fn_str = '\n'.join(fun.values())
 
                 #whitespace fn's still getting in. This will catch for that.
@@ -157,23 +159,27 @@ class gitProfileSet:
                     continue
 
                 try:
+                    fns_seens += 1
                     tu = PPTools.Tokenize.get_tu(fn_str)
                     tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
-                    inputs.append(PPTools.Tokenize.tokensToText(tokens))  # Convert to text
+                    # inputs.append(PPTools.Tokenize.tokensToText(tokens))
 
-                    #Reset tu Brute?
-                    #tu = PPTools.Tokenize.get_tu(fn_str)
+                    import copy
+                    # getting the token pointer-related errors; comment out for now
+                    token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True) # can't use this for inputs, but need to ignore comments for AST features
+                    inputs.append(token_text)  # Convert to text
+
+                    token_text = token_text.split(" ")
                     
-                    #tree = ASTFeatureExtractor.AST(tu.cursor)
-                    #tree.traverse()
-
-                    # TODO: concatenate in the featureExtractor module or here?
-                    #node_types.append(" ".join(tree.node_types))
-                    #code_unigrams.append(" ".join(tree.code_unigrams))
-                    #del tree
-
+                    ast_feature_ext = ASTFeatureExtractor.ASTFeatures(token_text)
+                    ast_feature_ext.traverse()
+                    node_types.append(" ".join(ast_feature_ext.node_types))
+                    
                 except Exception:
-                    continue
+                    node_types.append('')
+                    fns_failed += 1
+                    #continue
+
 
                 """
                 Bigram matrix:
@@ -197,36 +203,29 @@ class gitProfileSet:
                 del tokens
             
         inputs = np.array(inputs)
-
+        print(100 * fns_failed / fns_seens)
         # TODO: abstract this out since it gets used a lot.
         print("Vectorizing...")
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
                                        decode_error="ignore", lowercase=False)
-        vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S*",
-                                        decode_error="ignore", lowercase=False,
-                                        use_idf=False)
+        # vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S*",
+        #                                 decode_error="ignore", lowercase=False,
+        #                                 use_idf=False)
 
-        self.counts = hstack([charLevelFeatures, tokFeatures], format = 'csr')
+        #self.counts = hstack([charLevelFeatures, tokFeatures], format = 'csr')
+        self.counts = charLevelFeatures
         self.terms = charfeatureNames #+ tokfeatureNames
 
         need_tf = False
 
-        #i = 0
-        #for features in tqdm([inputs, node_types, code_unigrams]):
-        #    i += 1
-            # TFIDF
-        self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
-                                 format = 'csr')
-        self.terms += vectorizer.get_feature_names()
+        i = 0
+        for features in [inputs, node_types]:
+            i += 1
 
-            # Get only the term frequencies
-        # if need_tf:
-        #     self.counts = hstack([self.counts, vectorizer_tf.fit_transform(features)],
-        #                             format = 'csr')
-        #     self.terms += vectorizer_tf.get_feature_names()
-        # else:
-        #     # accounts for the fact that we do not need the TF of the unigrams/inputs
-        #     need_tf = True
+            self.counts = hstack([self.counts, vectorizer.fit_transform(features)],
+                                    format = 'csr')
+            self.terms += vectorizer.get_feature_names()
+        
 
         del inputs, node_types, code_unigrams
 
@@ -341,17 +340,6 @@ class gitProfileSet:
 
         return (strength, importances)
 
-    def testProgrammerTransparency (self, authors = None):
-        results = dict()
-        #{name: (pr, re, f1)}
-        if authors == None:
-            authors = [author.name for author in self.authors]
-
-        for author in authors:
-            results.update({author: 0})
-
-        return results
-        
     def functionToString(self, lines):
         textLines = list(len(lines))
 

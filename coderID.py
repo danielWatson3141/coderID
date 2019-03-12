@@ -90,7 +90,7 @@ class MyPrompt(Cmd):
         if(args == ""):
             print("Error, must supply name of existing gps. Use 'new' to start a fresh one.")
         self.activegps = self.load(args)
-        self.prompt = self.activegps.name
+        self.prompt = self.activegps.name+">"
 
     def load(self, gpsName):
         for gpsFile in self.gpsList:
@@ -167,7 +167,7 @@ class MyPrompt(Cmd):
                 self.do_loadGit(directory+"/"+subdir)
                 self.do_compile("")
             else:
-                print("Skipping "+subdir+"As it is already found")
+                print("Skipping "+subdir+" as it is already found.")
         
     def do_quit(self, args):
         """quits the program WITHOUT SAVING"""
@@ -183,42 +183,32 @@ class MyPrompt(Cmd):
         """Builds and evaluates a Random Forest classifier for the chosen authors and features"""
 
         expName = self.activegps.name
-        """
-        args = args.split(" ")
-        n_est = 300
-        
-        if len(args) >= 1 and args[0] != '':
-            numAuthors = int(args[0])
-        if len(args) >= 2:
-            n_est = int(args[1])
-        if len(args) >= 3:
-            expName = args[2]
-        """
+       
         if len(args) > 0:
             expName = args[0]
 
         if not self.activegps.featuresDetected:
             print("Running Feature Detection")
             self.activegps.getFeatures()
+            self.activegps.featuresSelected = None
+            self.do_save()
 
         if self.activegps.featuresSelected is None:
             self.activegps.featureSelect()
+            self.do_save()
 
-        print("Generating CM")
+        print("Generating Class Report")
         n_samples = len(self.activegps.target)
         #clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
         clf = Classifier.Classifier()
 
-        #shuffle the dataset
-        features, targets = utils.shuffle(self.activegps.featuresSelected, self.activegps.target)
-        
-        #fit the model to the first 2/3 of the samples
-        train_size = int(np.floor(n_samples * clf.train_size))
-        clf.model.fit(features[:train_size], targets[:train_size])
-        
-        #predict the last 1/3 of the data
-        predictions = clf.model.predict(features[train_size:])
-        expected = targets[train_size:]
+        results = dict()
+        for authorName in tqdm(self.activegps.authors):
+            results.update(
+                {authorName:
+                    self.twoClassTest(authorName, splits = 3, dictOutput=True)
+                }
+            )
 
         import csv
 
@@ -244,106 +234,29 @@ class MyPrompt(Cmd):
                 for item in best:
                     writer.writerow(item)
 
-
-        #compute confusion matrix
-        cm = metrics.confusion_matrix(expected, predictions)
-        print(cm)
-
-        #write confusion matrix
-        with open(self.resultLocation+expName+"CM.csv", 'w+') as csvfile:
-            writer = csv.writer(csvfile, delimiter=',',
-                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            for row in cm:
-                writer.writerow(row)
-
-
-        #make classification report
-        classReport = classification_report(expected, predictions, output_dict=True)
-
-        print(classification_report(expected, predictions))
-        #write classification report
-
         with open(self.resultLocation+expName+"_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)
-
-            oneSample = list(classReport.items())[0]
+            oneReport = list(results.items())[0]
+            oneSample = oneReport[1][oneReport[0]]
             header = ["Author"]
-            header.extend(oneSample[1].keys())
+            header.extend(oneSample.keys())
+            print(header)
             w.writerow(header)
-
-            for item in classReport.items():
-                row = [item[0]]
-                row.extend(item[1].values())
-                w.writerow(row)
-
-    def do_match(self, args):
-        """search for matches in a target repo"""
-        self.detectKnownAuthors(args)
-
-    def detectKnownAuthors(self, targetRepo, maxFP=.1, n_est = 300):
-        """Given a target repo, attempt to identify any code in said repo written by any author in the gps. Will set ROC point such that FPR <= maxFP"""
-        
-        #cross validate, generating a two lists:
-            #(success: bool)
-            #(confidence: num)
-
-        if not self.activegps.featuresDetected:     #get features of currently active repo
-            self.activegps.getFeatures()
-            self.do_save("")
-
-        if self.activegps.featuresSelected is None:
-            self.activegps.featureSelect()
-            self.do_save("")
-
-        success, confidence = self.determineConfidence(self.activegps.featuresSelected, self.activegps.target)    #determine confidence of resolved classifier
-
-        decisionPoint = self.decisionMaximizationProcedure(success, confidence)
-
-
-        try:
-            targetgps = self.loadGPSFromFile(targetRepo)
-        except FileNotFoundError:
-            print("Target GPS not found. Compile it first.")
-            return
-        
-        if not targetgps.featuresDetected():
-            targetgps.getFeatures()
-        
-        #train a classifier on entire self dataset
-
-        clf = RandomForestClassifier(n_estimators=n_est, max_features="sqrt")
-        
-        clf.fit(self.activegps.featuresSelected, self.activegps.targets)
-
-        pred = clf.predict_proba(targetgps.counts[:,self.activegps.selectedIndeces])  # get matrix of class probabilities
-
-        for sample, target in zip(pred, targetgps.target):
-                predIndex = np.argmax(sample)
-                prediction = clf.classes_[predIndex]  #get item with max probability
-                confidence = sample[predIndex]
-                success = prediction == target #record whether the result was correct
-
-                if confidence > decisionPoint:
-                    print("Match: "+ prediction+", "+target+", "+confidence)
-    
+            #make classification report
+            for authorName, result in results.items():
+                result = result[authorName]
+                row = [authorName]+[value for key, value in result.items()]
+                print(row)
+                w.writerow
+            
+            #write classification report
+   
     def do_authorAuthTest(self, args):
         """Find precision and recall for given author in 2 class test"""
         if args == "":
             print("Needs an author parameter")
 
         print(self.twoClassTest(args))
-
-    def do_allAuthTest(self, args, mindocs = 30):
-        output = dict()
-        for authorName, author in tqdm(self.activegps.authors.items()):
-            if len(author.functions) > mindocs:
-                result = self.twoClassTest(authorName, dictOutput=True)
-                precision = result[authorName]["precision"]
-                recall = result[authorName]["recall"]
-                output.update({authorName:(precision, recall)})
-
-        for result in output.items():
-            print(result)
 
     def twoClassTest(self, author, splits = 5, dictOutput=False):
         
@@ -356,19 +269,24 @@ class MyPrompt(Cmd):
             gps.getFeatures()
         
         features = copy.deepcopy(gps.counts)
-        targets = copy.deepcopy(gps.target)
-
+        #targets = copy.deepcopy(gps.target)
+        targets = list()
         
         authorCount = 0
         notCount = 0
-        for i in range(1, len(targets)):
-            if not targets[i] == author:
-                targets[i] = "not_"+author
+        for authorName in gps.target:
+            if not authorName == author:
+                targets.append("not_"+author)
                 notCount += 1
             else:
+                targets.append(author)
                 authorCount += 1
 
+        
 
+        targets = np.array(targets)
+
+        #TODO:update to match modularity changes
         clf = RandomForestClassifier(n_estimators=600, oob_score=True, max_features="sqrt", class_weight={author:5, "not_"+author:1})
         
         #cross validate for prec and rec
@@ -376,6 +294,7 @@ class MyPrompt(Cmd):
         cv = StratifiedKFold(n_splits=splits, shuffle=True)
         pred = []
         tar = []
+        conf = []
         #print("Cross Validating")
         for train, test in cv.split(features, targets):
 
@@ -389,8 +308,17 @@ class MyPrompt(Cmd):
 
             pred.extend(clf.predict(teFeatures))
             tar.extend(teTarget)
+            conf.extend([prob[0] for prob in clf.predict_proba(teFeatures)])
 
-        return classification_report(pred, tar, output_dict=dictOutput)
+        from sklearn.metrics import auc, roc_curve
+        
+        fpr, tpr, thresholds = roc_curve(tar, conf, pos_label=author)
+        auc = auc(fpr, tpr)
+        
+        report = classification_report(pred, tar, output_dict=dictOutput)
+        report[author]["AUC"] = auc
+        
+        return report
 
     def do_featureDetect(self, args):
         self.activegps.getFeatures()
@@ -403,86 +331,6 @@ class MyPrompt(Cmd):
             redF = .7    
         self.activegps.featureSelect(redF)
         self.do_save()
-    
-    def decisionMaximizationProcedure(self, success:np.array, confidence:np.array, maxFP=.1, precision = .01):
-        """return the highest d such that P(success| confidence > d) >= 1-maxFP"""
-
-        if len(success) != len(confidence):
-            raise Exception("success and confidence vectors must be equal in length")
-
-        corclass = confidence[success]      #Confidence in correct instances
-        misclass = confidence[not success]  #Confidence in incorrect instances
-
-        totalCount = len(success)
-        
-        #If misclassification rate is less than maximum false positive rate then the optimal cut-off is is the minimum of the correct instances
-        if len(misclass) < maxFP*totalCount:
-            return min(corclass)
-        
-
-        upper = 1
-        lower = 0
-        d = .5
-        fp = 1
-
-        maxIter = 10
-        iterCount = 0   #Don't iterate more than ten times. Necessary to prevent infinite loop on small datasets
-
-        while (fp > maxFP+precision or fp < maxFP-precision) and iterCount < maxIter:
-
-            
-            iterCount += 1
-
-            d = (upper+lower)/2
-            
-            fp = len(np.where(misclass>d))/totalCount   #fp rate with d at its current value
-
-            print("d: "+d+" "+"fp: "+fp)
-            
-            if fp < maxFP:
-                upper = d
-            else:
-                lower = d
-
-        if iterCount == 10:
-            print("terminated after 10 iterations. This is problematic.")
-        return d
-
-        
-    def determineConfidence(self, features, targets, n_est = 300):
-        """Cross validate over the given data and return the scores"""
-        print("Cross Validating...")
-        clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
-        numSamples = features.shape[0]
-        train_size=min(1000 ,  numSamples* .5)
-        test_size=min(200 ,  numSamples* .2)
-        splits = 3
-
-        cv = StratifiedKFold(n_splits=splits)
-        
-        success = np.empty((test_size*splits))
-        confidence = np.empty((test_size*splits))
-        index = 0
-
-        for train, test in cv.split(np.zeros(len(targets)), targets):
-            
-            trainingSet = (features[train], targets[train]) #Select training set
-
-            clf.fit(trainingSet[0], trainingSet[1])         #train model
-
-            testSet = (features[test], targets[test])       #Select test set
-
-            probabilities = clf.predict_proba(testSet[0])   #predict probabilities over test set
-            
-            for sample, target in zip(probabilities, testSet[1]):
-                predIndex = np.argmax(sample)
-                prediction = clf.classes_[predIndex]  #get item with max probability
-
-                success[index] = prediction == target #record whether the result was correct
-                confidence[index] = sample[predIndex] #record the confidence of the result
-                index += 1
-
-        return (success, confidence)
 
     def do_authorsInCommon(self, args):
         for file1 in os.listdir(self.saveLocation):
@@ -552,11 +400,6 @@ class MyPrompt(Cmd):
         """Displays all authors found in the currently loaded git repos"""
         self.activegps.displayAuthors()
         #print(self.activegps)
-
-    def do_setOption(self, args):
-        """This method should take args option , value. Not implemented yet, check config issue on Github."""
-        pass
-
 
     def do_loadGitRepos(self, args):
         """Loads a directory args[0] of git repos, as many as args[1] def:inf"""
@@ -674,36 +517,6 @@ class MyPrompt(Cmd):
                 if tempdir != None:
                     shutil.copytree(tempdir+repoDirName, outputDir+"/"+repoDirName)
                     shutil.rmtree(tempdir+repoDirName)
-
-    def sanityCheck(self, features, targets, model, numAuthors):
-
-        from sklearn import metrics,utils
-
-        n_samples = len(targets)
-       
-        features, targets = utils.shuffle(features, targets)
-        expected = targets[n_samples //2:]
-        # Test here
-        model.fit(features[:n_samples//2], targets[:n_samples//2])
-        predictions = model.predict(features[n_samples//2:])
-
-        cm = metrics.confusion_matrix(expected, predictions)
-        sortedAuthors = sorted(self.activegps.authors.keys(), reverse=False)
-        authCount = numAuthors
-        if numAuthors == -1:
-            authCount = len(sortedAuthors)
-        #assert len(sortedAuthors) == cm.shape[0]
-        """
-        for i in range(0, authCount):
-            print(sortedAuthors[i]+": P="+str(cm[i,i]/sum(cm[i]))+" R="+str(cm[i,i]/sum(cm[:,i])))
-        """
-        from sklearn.metrics import classification_report
-        print(classification_report(expected, predictions))
-
-        #import numpy
-        #numpy.set_printoptions(threshold='nan')
-        
-        print("Confusion matrix:\n%s" % cm)
 
     @staticmethod
     def bestNFeatures(imp, names, n):
