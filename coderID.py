@@ -200,7 +200,7 @@ class MyPrompt(Cmd):
         print("Generating Class Report")
         #n_samples = len(self.activegps.target)
         #clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
-        clf = Classifier.Classifier()
+        #clf = Classifier.Classifier()
 
         results = dict()
         for authorName in tqdm(self.activegps.authors):
@@ -219,20 +219,22 @@ class MyPrompt(Cmd):
         except FileExistsError:
             pass
 
-        if clf.model_name == 'random_forest':
-            #Compute OOB score
-            print("OOB score: "+str(clf.model.oob_score_))
+        #This doesn't work with one vs all format.
+        #TODO: Rethink
+        # if clf.model_name == 'random_forest':
+        #     #Compute OOB score
+        #     print("OOB score: "+str(clf.model.oob_score_))
         
-            #Compute best 50 features
-            best = self.bestNFeatures(clf.model.feature_importances_, self.activegps.terms, 50)
+        #     #Compute best 50 features
+        #     best = self.bestNFeatures(clf.model.feature_importances_, self.activegps.terms, 50)
 
-            #write best features
-            with open(self.resultLocation+expName+"_best_features.csv", 'w+') as csvfile:
-                writer = csv.writer(csvfile, delimiter=',',
-                                quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        #     #write best features
+        #     with open(self.resultLocation+expName+"_best_features.csv", 'w+') as csvfile:
+        #         writer = csv.writer(csvfile, delimiter=',',
+        #                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
-                for item in best:
-                    writer.writerow(item)
+        #         for item in best:
+        #             writer.writerow(item)
 
         with open(self.resultLocation+expName+"_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)
@@ -272,22 +274,35 @@ class MyPrompt(Cmd):
         #targets = copy.deepcopy(gps.target)
         targets = list()
         
-        authorCount = 0
-        notCount = 0
-        for authorName in gps.target:
-            if not authorName == author:
-                targets.append("not_"+author)
-                notCount += 1
-            else:
-                targets.append(author)
-                authorCount += 1
 
+        authorInd = []
         
+        notAuthorInd = []
 
+        for i in range(0,len(gps.target)):  #find indeces containing examples from author in question
+            authorName = gps.target[i]
+            if authorName == author:
+                targets.append(author)
+                authorInd.append(i)
+            else:
+                targets.append("not_"+author)
+                notAuthorInd.append(i)
+
+        authorCount = len(authorInd)
+        notAuthorCount = len(notAuthorInd)
+
+        test_ratio = float(PPTools.Config.config['Cross Validation']['test_ratio'])
+
+        if authorCount / notAuthorCount < test_ratio:
+            maxNotAuthorAllowed = int((1 / test_ratio) * authorCount)
+            from random import sample
+            notAuthorInd = sample(notAuthorInd, maxNotAuthorAllowed)
+            features = features[authorInd+notAuthorInd]
+            targets = [targets[i] for i in authorInd+notAuthorInd]
+        
         targets = np.array(targets)
 
-        #TODO:update to match modularity changes
-        clf = RandomForestClassifier(n_estimators=600, oob_score=True, max_features="sqrt", class_weight={author:5, "not_"+author:1})
+        clf = Classifier.Classifier().model
         
         #cross validate for prec and rec
 
@@ -321,7 +336,7 @@ class MyPrompt(Cmd):
         
         report = classification_report(pred, tar, output_dict=dictOutput)
         report[author]["AUC"] = auc
-        report[author]['%'] = 100 * authorCount / (authorCount+notCount)
+        report[author]['%'] = 100 * authorCount / (authorCount+notAuthorCount)
         
         return report
 
