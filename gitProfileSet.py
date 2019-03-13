@@ -193,11 +193,11 @@ class gitProfileSet:
                                                 featureExtractors.featureExtractors.characterLevel(fn_str)])
 
 
-                # Token-level features
-                # if tokFeatures is None:
-                #     tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
-                # else:
-                #     tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
+                #Token-level features
+                if tokFeatures is None:
+                    tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
+                else:
+                    tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
 
                 self.target.append(author.name)
                 del tokens
@@ -206,17 +206,13 @@ class gitProfileSet:
         print(100 * fns_failed / fns_seens)
         # TODO: abstract this out since it gets used a lot.
         print("Vectorizing...")
-        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
+        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern=r"\S*",
                                        decode_error="ignore", lowercase=False)
-        # vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S*",
-        #                                 decode_error="ignore", lowercase=False,
-        #                                 use_idf=False)
+       
+        self.counts = hstack([charLevelFeatures, tokFeatures], format = 'csr')
+        #self.counts = charLevelFeatures
+        self.terms = charfeatureNames + tokfeatureNames
 
-        #self.counts = hstack([charLevelFeatures, tokFeatures], format = 'csr')
-        self.counts = charLevelFeatures
-        self.terms = charfeatureNames #+ tokfeatureNames
-
-        need_tf = False
 
         i = 0
         for features in [inputs, node_types]:
@@ -283,7 +279,7 @@ class gitProfileSet:
             from operator import itemgetter
             match = zip(range(0, nFeatures), importances)            
             
-            nFeatures = int(reductionFactor*nFeatures)
+            nFeatures = int((1-reductionFactor)*nFeatures)
             
             previousFeatures = features
             previousTerms = terms

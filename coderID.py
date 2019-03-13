@@ -198,7 +198,7 @@ class MyPrompt(Cmd):
             self.do_save()
 
         print("Generating Class Report")
-        n_samples = len(self.activegps.target)
+        #n_samples = len(self.activegps.target)
         #clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
         clf = Classifier.Classifier()
 
@@ -308,28 +308,35 @@ class MyPrompt(Cmd):
 
             pred.extend(clf.predict(teFeatures))
             tar.extend(teTarget)
-            conf.extend([prob[0] for prob in clf.predict_proba(teFeatures)])
+            
+            if clf.classes_[0] == author:   #Make sure the author in question is treated as the pos label...
+                conf.extend([prob[0] for prob in clf.predict_proba(teFeatures)])
+            else:
+                conf.extend([prob[1] for prob in clf.predict_proba(teFeatures)])
 
         from sklearn.metrics import auc, roc_curve
         
-        fpr, tpr, thresholds = roc_curve(tar, conf, pos_label=author)
+        fpr, tpr, thresholds = roc_curve(tar, conf, pos_label=author)   #...for this
         auc = auc(fpr, tpr)
         
         report = classification_report(pred, tar, output_dict=dictOutput)
         report[author]["AUC"] = auc
+        report[author]['%'] = 100 * authorCount / (authorCount+notCount)
         
         return report
 
     def do_featureDetect(self, args):
+        """Perform feature selection operations. 
+        This is called automatically from classifyFunctions if not run already.
+        This resets the state of selected features, requiring that procedure to be run again."""   
+        
         self.activegps.getFeatures()
+        self.activegps.featuresSelected = None
         self.do_save()
 
     def do_featureSelect(self, args):
-        if args is not '':
-            redF = float(args)
-        else:
-            redF = .7    
-        self.activegps.featureSelect(redF)
+        """Perform feature selection operation. This is called automatically from classifyFunctions if not run already"""   
+        self.activegps.featureSelect()
         self.do_save()
 
     def do_authorsInCommon(self, args):
@@ -456,7 +463,7 @@ class MyPrompt(Cmd):
                 total = 0
 
                 for fun in author.functions:
-                    ((hsh, fil, line),code) = next(iter(fun.items()))
+                    ((hsh, fil, line),code) = next(iter(fun.items())) #Python is whack man.
                     print(fil+":")
                     for line in fun.values():
                         print(line)
