@@ -249,7 +249,7 @@ class MyPrompt(Cmd):
                 result = result[authorName]
                 row = [authorName]+[value for key, value in result.items()]
                 print(row)
-                w.writerow
+                w.writerow(row)
             
             #write classification report
    
@@ -293,7 +293,7 @@ class MyPrompt(Cmd):
 
         test_ratio = float(PPTools.Config.config['Cross Validation']['test_ratio'])
 
-        if authorCount / notAuthorCount < test_ratio:
+        if authorCount / notAuthorCount < test_ratio:  #if author makes up less than test_ratio of the sample, reduce the sample size
             maxNotAuthorAllowed = int((1 / test_ratio) * authorCount)
             from random import sample
             notAuthorInd = sample(notAuthorInd, maxNotAuthorAllowed)

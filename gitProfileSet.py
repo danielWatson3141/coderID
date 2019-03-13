@@ -46,8 +46,6 @@ class gitProfileSet:
             print("Couldn't get that one...")
         #self.compileAuthors(newRepo)    
     
-
-    
     def compileAuthors(self, authors = None):
         """Mine all repos in the repo list for commits by those in authors. None for get all"""
         for repo in self.repos:
@@ -66,15 +64,16 @@ class gitProfileSet:
                 
                 if authors is not None and author not in authors:
                     continue
-                tipe = commitType.categorize(commit, langList=gitProfileSet.langList)
+                #tipe = commitType.categorize(commit, langList=gitProfileSet.langList)
 
-                if tipe not in tipeCounts:
-                    tipeCounts.update({tipe: 0})
-                count = tipeCounts.get(tipe)
-                tipeCounts.update({tipe: count+1})
+                #if tipe not in tipeCounts:
+                #    tipeCounts.update({tipe: 0})
+                #count = tipeCounts.get(tipe)
+                #tipeCounts.update({tipe: count+1})
 
 
-                if tipe is commitType.FEATURE:
+                #if tipe is commitType.FEATURE:
+                if True:    #for now, not worried about commit type
                     if author.name not in self.authors:
                         self.authors.update({author.name:gitAuthor(author)})
                         #print("Found new author: "+author.name)
@@ -120,7 +119,7 @@ class gitProfileSet:
                     
                     
             print(str("finished"+str(miner._path_to_repo)))
-            print("types: "+str(tipeCounts))
+            print(self)
             #print(authorsWithEnoughDocs+" authors with enough code so far.")
 
 
@@ -238,7 +237,8 @@ class gitProfileSet:
 
         if self.featuresSelected is not None:
             print("Features selected already, skipping.")
-        
+        else:
+            print("Selecting features...")
 
         total_num_features = self.counts.shape[1]
         print("Number of features before selection: {}".format(total_num_features))
