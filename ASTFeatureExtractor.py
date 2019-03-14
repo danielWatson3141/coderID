@@ -60,10 +60,11 @@ class ASTFeatures:
         # non-terminal nodes
         if not is_leaf:
             self.node_types.append(node_type)
-            if node_type in self.type_depths:
-                self.type_depths[node_type].append(level)
+            type_depth_name = node_type + "_avg_depth"
+            if type_depth_name in self.type_depths:
+                self.type_depths[type_depth_name].append(level)
             else:
-                self.type_depths[node_type] = [level]
+                self.type_depths[type_depth_name] = [level]
 
         """
         # Used for code in AST leaves features - not capturing all code for leaves
@@ -85,13 +86,24 @@ class ASTFeatures:
         self.node_types = " ".join(self.node_types)
         self.depths = csr_matrix([self.max_node_depth, self.avg_node_depth], shape=(1, 2))
 
-"""
-if __name__ == "__main__":
-    file = "test3.cpp"
-    tokens = PPTools.Tokenize.tokenize(file)
-    token_text = PPTools.Tokenize.tokensToText(tokens).split(" ")
 
-    features = ASTFeatures(token_text)
-    features.traverse()
-    print(features.node_types)
-"""
+if __name__ == "__main__":
+    fns_seen = 3
+    ast_feature_ext = {'p': 2, 'e': 3}
+    #node_type_depths = {'p': [2] * fns_seen, 'e': [5] * fns_seen}
+    node_type_depths = {'p': [0, 1, 2], 'd': [3, 2, 1]}
+
+    for node_type in ast_feature_ext:
+        if node_type not in node_type_depths:
+            node_type_depths[node_type] = [0.0] * fns_seen
+        node_type_depths[node_type].append(ast_feature_ext[node_type])
+
+    # Updating the node types that were not seen in this function but were
+    # seen before
+    for node_type in node_type_depths:
+        if node_type not in ast_feature_ext:
+            node_type_depths[node_type].append(0.0)
+
+    print(node_type_depths)
+
+
