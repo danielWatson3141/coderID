@@ -15,6 +15,7 @@ if not sys.warnoptions:
 import numpy as np
 from collections import Counter
 import itertools
+import copy
 from tqdm import tqdm
 from scipy.sparse import hstack, vstack, csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -135,7 +136,11 @@ class gitProfileSet:
 
         inputs=[]
         node_types = []
+        node_bigrams = []
+        depths = None
+        depths_names = ['max_ast_node_depth', 'avg_ast_node_depth']
         code_unigrams = []
+
         self.target = []
         charfeatureNames = featureExtractors.featureExtractors.charfeatureNames
         charLevelFeatures = None
@@ -145,6 +150,7 @@ class gitProfileSet:
         fns_failed = 0
         print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
+
         for author in tqdm(self.authors.values()):
             if numAuthors != -1 and authors_seen == numAuthors:
                     break
@@ -157,41 +163,43 @@ class gitProfileSet:
                 if fn_str.isspace() or fn_str == '':
                     continue
 
+                # having these below meant that they didn't run if a function wasn't parse correctly
+                self.target.append(author.name)
+                # Function-string level features
+                # processing 11 less functions now
+                charLevelFeatures = vstack([charLevelFeatures,
+                                            featureExtractors.featureExtractors.characterLevel(fn_str)])
                 try:
                     fns_seens += 1
                     tu = PPTools.Tokenize.get_tu(fn_str)
                     tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
                     inputs.append(PPTools.Tokenize.tokensToText(tokens))
 
-                    """
-                    # getting the token pointer-related errors; comment out for now
-                    token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True) # can't use this for inputs, but need to ignore comments for AST features
-                    inputs.append(token_text)  # Convert to text
-
+                    # generating the AST
+                    token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True)
                     token_text = token_text.split(" ")
-                    
                     ast_feature_ext = ASTFeatureExtractor.ASTFeatures(token_text)
                     ast_feature_ext.traverse()
-                    node_types.append(" ".join(ast_feature_ext.node_types))
+
+                    node_types.append(ast_feature_ext.node_types)
+                    node_bigrams.append(ast_feature_ext.bigrams_text)
+                    depths = vstack([depths, ast_feature_ext.depths])
+
+                    """
+                    depth matrix here
+                    Function fails to parse -> empty matrix?
                     """
 
-
                 except Exception as e:
+                    node_bigrams.append("")
+                    node_types.append("")
+                    """
+                    max_depths.append(0)
+                    avg_depths.append(0)
+                    """
+                    depths = vstack([depths, csr_matrix([0,0], shape=(1, 2))])
                     fns_failed += 1
                     continue
-
-
-                """
-                Bigram matrix:
-                Create a dok matrix (Dictionary Of Keys based sparse matrix) here
-                """
-                # Function-string level features
-                if charLevelFeatures is None:
-                    charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
-                else:
-                    charLevelFeatures = vstack([charLevelFeatures,
-                                                featureExtractors.featureExtractors.characterLevel(fn_str)])
-
 
                 # Token-level features
                 # if tokFeatures is None:
@@ -199,43 +207,53 @@ class gitProfileSet:
                 # else:
                 #     tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
 
-                self.target.append(author.name)
-                del tokens
+                del tokens, token_text
             
         inputs = np.array(inputs)
+        node_types = np.array(node_types)
+        node_bigrams = np.array(node_bigrams)
+
         print(100 * fns_failed / fns_seens)
         # TODO: abstract this out since it gets used a lot.
         print("Vectorizing...")
-        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S*",
+        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S+",
                                        decode_error="ignore", lowercase=False)
-        vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S*",
+        vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S+",
                                         decode_error="ignore", lowercase=False,
                                         use_idf=False)
 
-        #self.counts = hstack([charLevelFeatures, tokFeatures], format = 'csr')
-        self.counts = charLevelFeatures
-        self.terms = charfeatureNames #+ tokfeatureNames
+        # TODO: add avg depths and max depths here
+        self.counts = hstack([charLevelFeatures, depths, tokFeatures], format = 'csr')
+        self.terms = charfeatureNames + depths_names #+ tokfeatureNames
 
-        need_tf = False
+        """
+        print(self.counts.shape)
+        print(len(inputs))
+        print(len(self.target))
+        print(fns_seens)
+        """
 
-        #i = 0
-        #for features in tqdm([inputs, node_types, code_unigrams]):
-        #    i += 1
-            # TFIDF
+        # Tokens TFIDF
         self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
-                                 format = 'csr')
+                             format = 'csr')
         self.terms += vectorizer.get_feature_names()
 
-            # Get only the term frequencies
-        # if need_tf:
-        #     self.counts = hstack([self.counts, vectorizer_tf.fit_transform(features)],
-        #                             format = 'csr')
-        #     self.terms += vectorizer_tf.get_feature_names()
-        # else:
-        #     # accounts for the fact that we do not need the TF of the unigrams/inputs
-        #     need_tf = True
+        # AST Node Types TF and TFIDF
+        self.counts = hstack([self.counts, vectorizer.fit_transform(node_types),
+                              vectorizer_tf.fit_transform(node_types)],
+                             format='csr')
+        self.terms += vectorizer.get_feature_names() + vectorizer_tf.get_feature_names()
 
-        del inputs, node_types, code_unigrams
+        # AST Node Bigrams TF
+        vectorizer = TfidfVectorizer(analyzer="word", lowercase=False,
+                                     tokenizer=lambda x: x.split(";"))
+
+        self.counts = hstack([self.counts, vectorizer.fit_transform(node_bigrams)],
+                             format='csr')
+        self.terms += vectorizer.get_feature_names()
+
+
+        del inputs, node_types, code_unigrams, node_bigrams
 
         self.target = np.array(self.target)
 

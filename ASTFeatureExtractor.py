@@ -2,6 +2,7 @@ import os.path
 from clang import cindex
 import numpy as np
 from collections import Counter
+from scipy.sparse import csr_matrix
 
 import PPTools
 import AbstractSyntaxTree
@@ -20,10 +21,11 @@ class ASTFeatures:
         self.ast = AbstractSyntaxTree.ASTree()
         self.ast.lexer(token_text)
 
-        self.bigrams = Counter()      # Bigrams. Format: {(parent_type, child_type): frequency}
-        self.type_depths = Counter()  # Format: {ASTNodeType: depths}
-        self.node_types = []
+        self.bigrams_text = ""           # Bigrams. Format: {(parent_type, child_type): frequency}
+        self.type_depths = Counter()     # Format: {ASTNodeType: depths}
         self.code_unigrams = []
+        self.node_types = []
+        self.depths = None
 
         self.num_nodes = 0
         self.max_node_depth = 0
@@ -34,7 +36,7 @@ class ASTFeatures:
             return node.type + " " + node.data_type
         return node.type
 
-    def traverse_parent(self, node, level = 0):
+    def traverse_parent(self, node, ancestors, level = 0):
         self.num_nodes += 1
         self.avg_node_depth += level
         self.max_node_depth = max(self.max_node_depth, level)
@@ -42,17 +44,22 @@ class ASTFeatures:
 
         node_type = node.type
         node_ugram = self.node_to_unigram(node)
+        all_ancestors = ancestors + [node_ugram]
+
         for c in node.get_children():
-            self.node_types.append(node_type)
             # if this loop is entered, this node cannot be a leaf
             if is_leaf:
                 is_leaf = False
 
-            self.bigrams[(node_ugram, self.node_to_unigram(c))] += 1
-            self.traverse_parent(c, level + 1)
+            #self.bigrams[(node_ugram, self.node_to_unigram(c))] += 1
+            curr_ugram = self.node_to_unigram(c)
+            for ugram in all_ancestors:
+                self.bigrams_text += ugram + "," + curr_ugram + ";"
+            self.traverse_parent(c, all_ancestors, level + 1)
 
         # non-terminal nodes
         if not is_leaf:
+            self.node_types.append(node_type)
             if node_type in self.type_depths:
                 self.type_depths[node_type].append(level)
             else:
@@ -65,13 +72,18 @@ class ASTFeatures:
         """
 
     def traverse(self):
-        self.traverse_parent(self.ast.head)
+        self.traverse_parent(self.ast.head, [])
         self.avg_node_depth /= self.num_nodes
 
         # Changing type_depths format to {ASTNodeType: max_depth}
         for node_type in self.type_depths:
             self.type_depths[node_type] = np.mean(self.type_depths[node_type])
 
+        # Reformatting the data values
+        # drop the last semi-colon to avoid generating an empty string as a token
+        self.bigrams_text = self.bigrams_text[:-1]
+        self.node_types = " ".join(self.node_types)
+        self.depths = csr_matrix([self.max_node_depth, self.avg_node_depth], shape=(1, 2))
 
 """
 if __name__ == "__main__":
