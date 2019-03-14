@@ -82,7 +82,7 @@ class ASTree:
                 continue
 
             if len(base_data_type_seen) > 0:
-                data_type = " ".join(base_data_type_seen)
+                data_type = "_".join(base_data_type_seen)
                 base_data_type_seen = deque()
                 temp_stack.append(data_type)
 
