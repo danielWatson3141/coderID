@@ -198,10 +198,7 @@ class MyPrompt(Cmd):
             self.do_save()
 
         print("Generating Class Report")
-        #n_samples = len(self.activegps.target)
-        #clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="sqrt")
-        #clf = Classifier.Classifier()
-
+        
         results = dict()
         for authorName in tqdm(self.activegps.authors):
             results.update(
@@ -219,22 +216,23 @@ class MyPrompt(Cmd):
         except FileExistsError:
             pass
 
-        #This doesn't work with one vs all format.
-        #TODO: Rethink
-        # if clf.model_name == 'random_forest':
-        #     #Compute OOB score
-        #     print("OOB score: "+str(clf.model.oob_score_))
-        
-        #     #Compute best 50 features
-        #     best = self.bestNFeatures(clf.model.feature_importances_, self.activegps.terms, 50)
+        imp = None
+        for authorName, result in results.items():
+            importances = result["importances"]
+            if imp is None:
+                imp = importances
+            else:
+                imp = np.add(imp,importances)
+                
+        best = self.bestNFeatures(imp, self.activegps.terms, 200)
 
-        #     #write best features
-        #     with open(self.resultLocation+expName+"_best_features.csv", 'w+') as csvfile:
-        #         writer = csv.writer(csvfile, delimiter=',',
-        #                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        #write best features
+        with open(self.resultLocation+expName+"_best_features.csv", 'w+') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
-        #         for item in best:
-        #             writer.writerow(item)
+            for item in best:
+                writer.writerow(item)
 
         with open(self.resultLocation+expName+"_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)
@@ -310,24 +308,32 @@ class MyPrompt(Cmd):
         pred = []
         tar = []
         conf = []
+        imp = None  #cumulative feature importances
         #print("Cross Validating")
         for train, test in cv.split(features, targets):
 
             trFeatures = features[train]
-            trTarget = targets[train]
+            trTarget = targets[train]   #grab the training set...
 
             teFeatures = features[test]
-            teTarget = targets[test]
+            teTarget = targets[test]    #...and the test set.
    
-            clf.fit(trFeatures, trTarget)
+            clf.fit(trFeatures, trTarget)   #train the model
 
-            pred.extend(clf.predict(teFeatures))
+            if imp is None:
+                imp = clf.feature_importances_  #grab the feature importances
+            else:
+                imp = np.add(imp, clf.feature_importances_)
+
+            pred.extend(clf.predict(teFeatures))    #evaluate on the test data
             tar.extend(teTarget)
             
             if clf.classes_[0] == author:   #Make sure the author in question is treated as the pos label...
                 conf.extend([prob[0] for prob in clf.predict_proba(teFeatures)])
             else:
                 conf.extend([prob[1] for prob in clf.predict_proba(teFeatures)])
+
+        imp = np.divide(imp,splits)
 
         from sklearn.metrics import auc, roc_curve
         
@@ -337,6 +343,7 @@ class MyPrompt(Cmd):
         report = classification_report(pred, tar, output_dict=dictOutput)
         report[author]["AUC"] = auc
         report[author]['%'] = 100 * authorCount / (authorCount+notAuthorCount)
+        report["importances"] = imp
         
         return report
 
