@@ -167,8 +167,6 @@ class gitProfileSet:
                 self.target.append(author.name)
                 # Function-string level features
                 # processing 11 less functions now
-                charLevelFeatures = vstack([charLevelFeatures,
-                                            featureExtractors.featureExtractors.characterLevel(fn_str)])
                 try:
                     fns_seens += 1
                     tu = PPTools.Tokenize.get_tu(fn_str)
@@ -240,7 +238,7 @@ class gitProfileSet:
 
         # TODO: add avg depths and max depths here
         self.counts = hstack([charLevelFeatures, depths, tokFeatures], format = 'csr')
-        self.terms = charfeatureNames + depths_names #+ tokfeatureNames
+        self.terms = charfeatureNames + depths_names + tokfeatureNames
 
         """
         print(self.counts.shape)
