@@ -37,3 +37,22 @@ def plot_roc_auc_curves(results, directory="classResults", session_name=""):
             author, metrics["fpr"], metrics["tpr"], metrics[author]["AUC"], get_color(i),
             directory=directory, session_name=session_name
         )
+
+    # Plot all ROC curves
+    lw = 2
+    for i, (author, metrics) in enumerate(results.items()):
+        plt.plot(
+            metrics["fpr"], metrics["tpr"], color=get_color(i), lw=lw,
+            label="ROC curve for {0:s} (area = {1:0.1f})".format(author, metrics[author]["AUC"]),
+        )
+    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('All ROC Curves for {}'.format(session_name))
+    plt.legend(loc="lower right")
+
+    # Save plot
+    plot_filepath = "{}/{}_All_ROC.png".format(directory, session_name)
+    plt.savefig(plot_filepath)
