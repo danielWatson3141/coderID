@@ -21,6 +21,8 @@ from sklearn.model_selection import cross_val_score,ShuffleSplit, StratifiedKFol
 from sklearn import metrics, utils
 from sklearn.metrics import classification_report
 
+from plotting import plot_roc_auc_curves
+
 
 
 from tqdm import tqdm
@@ -198,7 +200,7 @@ class MyPrompt(Cmd):
             self.do_save()
 
         print("Generating Class Report")
-        
+
         results = dict()
         for authorName in tqdm(self.activegps.authors):
             results.update(
@@ -223,7 +225,7 @@ class MyPrompt(Cmd):
                 imp = importances
             else:
                 imp = np.add(imp,importances)
-                
+
         best = self.bestNFeatures(imp, self.activegps.terms, 200)
 
         #write best features
@@ -248,9 +250,12 @@ class MyPrompt(Cmd):
                 row = [authorName]+[value for key, value in result.items()]
                 print(row)
                 w.writerow(row)
-            
-            #write classification report
-   
+
+        # Plot ROC AUC curves
+        plot_roc_auc_curves(results, self.resultLocation, expName)
+
+
+
     def do_authorAuthTest(self, args):
         """Find precision and recall for given author in 2 class test"""
         if args == "":
@@ -317,7 +322,7 @@ class MyPrompt(Cmd):
 
             teFeatures = features[test]
             teTarget = targets[test]    #...and the test set.
-   
+
             clf.fit(trFeatures, trTarget)   #train the model
 
             if imp is None:
@@ -327,7 +332,7 @@ class MyPrompt(Cmd):
 
             pred.extend(clf.predict(teFeatures))    #evaluate on the test data
             tar.extend(teTarget)
-            
+
             if clf.classes_[0] == author:   #Make sure the author in question is treated as the pos label...
                 conf.extend([prob[0] for prob in clf.predict_proba(teFeatures)])
             else:
@@ -336,15 +341,17 @@ class MyPrompt(Cmd):
         imp = np.divide(imp,splits)
 
         from sklearn.metrics import auc, roc_curve
-        
+
         fpr, tpr, thresholds = roc_curve(tar, conf, pos_label=author)   #...for this
         auc = auc(fpr, tpr)
-        
+
         report = classification_report(pred, tar, output_dict=dictOutput)
         report[author]["AUC"] = auc
         report[author]['%'] = 100 * authorCount / (authorCount+notAuthorCount)
         report["importances"] = imp
-        
+        report["fpr"] = fpr
+        report["tpr"] = tpr
+
         return report
 
     def do_featureDetect(self, args):
