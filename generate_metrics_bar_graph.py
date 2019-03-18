@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -57,5 +58,11 @@ def plot_precision_recall_bar_graph(session_names, session_precisions, session_r
 
 
 if __name__ == "__main__":
-    session_names, precisions, recalls = get_session_metrics("bar_graph_sessions.csv")
+    if (len(sys.argv) < 2):
+        sample_file = "bar_graph_sessions.csv"
+        print("You must pass in a sessions list file. e.g. python {} {}".format(sys.argv[0], sample_file))
+        exit(1)
+
+    session_file = sys.argv[1]
+    session_names, precisions, recalls = get_session_metrics(session_file)
     plot_precision_recall_bar_graph(session_names, precisions, recalls)
