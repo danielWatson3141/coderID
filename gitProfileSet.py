@@ -304,8 +304,7 @@ class gitProfileSet:
 
         previous = 0
         strength = .01
-        
-        
+
         nFeatures = total_num_features
         features = self.counts
         terms = self.terms
@@ -345,42 +344,7 @@ class gitProfileSet:
         frac_selected = 100 * n_relevant_features / total_num_features
         print("Percentage of features selected: {:.2f}%".format(frac_selected))
 
-    def evaluate(self, clf, features, targets):
-        from sklearn.model_selection import cross_val_score, ShuffleSplit
-        numSamples = features.shape[0]
-        section = 'Cross Validation'
-
-        splits = PPTools.Config.get_value(section, 'n_splits')
-        trSize = int(min(PPTools.Config.get_value(section, 'train_min'),
-                         numSamples * PPTools.Config.get_value(section, 'train_ratio')))
-        teSize = int(min(PPTools.Config.get_value(section, 'test_min'),
-                         numSamples * PPTools.Config.get_value(section, 'test_ratio')))
-        featureCount = features.shape[1]
-        cv = ShuffleSplit(n_splits=splits, train_size=trSize, test_size=teSize)
-        
-        
-        importances = np.zeros(featureCount)
-        strength = 0
-        for train, test in cv.split(features, targets):
-
-            trFeatures = features[train]
-            trTarget = targets[train]
-
-            teFeatures = features[test]
-            teTarget = targets[test]
-   
-            clf.fit(trFeatures, trTarget)
-
-            predictions = clf.predict(teFeatures)
-
-            stren = len(np.where(predictions == teTarget)[0])/teSize
-
-            strength += stren / splits
-            importances += clf.feature_importances_ / splits
-            
-
-        return (strength, importances)
-
+    
     def functionToString(self, lines):
         textLines = list(len(lines))
 

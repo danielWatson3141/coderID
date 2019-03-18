@@ -16,6 +16,7 @@ import numpy as np
 import csv
 import Classifier
 import PPTools
+import heapq
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score,ShuffleSplit, StratifiedKFold
 from sklearn import metrics, utils
@@ -193,9 +194,9 @@ class MyPrompt(Cmd):
             self.activegps.featuresSelected = None
             self.do_save()
 
-        if self.activegps.featuresSelected is None:
-            self.activegps.featureSelect()
-            self.do_save()
+        # if self.activegps.featuresSelected is None:
+        #     self.activegps.featureSelect()
+        #     self.do_save()
 
         print("Generating Class Report")
         splits = int(PPTools.Config.config["Cross Validation"]["n_splits"])
@@ -296,6 +297,85 @@ class MyPrompt(Cmd):
         clf.fit(features, targets)   #train the model
         return clf #return the model
 
+    def reFeSe(self, model, features, targets):
+         #train with all features to start
+
+        previous = 0
+        strength = .01
+        previousBest = range(0, features.shape[1])
+        best = None
+        nFeatures = features.shape[1]
+
+        retFeatures = features
+
+        #reduce sample size to decrease training time
+        maxSamples = int(PPTools.Config.config["Feature Selection"]["max_samples"])
+        reductionFactor = float(PPTools.Config.config["Feature Selection"]["reduction_factor"])
+        if len(targets) > maxSamples:
+            from random import sample
+            samples = sample(range(0,len(targets)), maxSamples)
+            features = features[samples,:]
+            targets = targets[samples]
+
+        #choose optimal feature set size
+        while True:
+            previous = strength
+            
+            strength, importances = self.evaluate(model, features, targets)
+            #print((nFeatures, strength))
+            if strength < previous:
+                break
+            from operator import itemgetter
+            match = zip(range(0, features.shape[1]), importances)            
+            
+            nFeatures = int((1-reductionFactor)*nFeatures)
+            
+            if best is not None:
+                previousBest = best
+
+            best = list(map(lambda x: x[0], heapq.nlargest(nFeatures, match, key = itemgetter(1))))
+
+            features = features[:,best]
+
+        return previousBest
+        
+
+    def evaluate(self, clf, features, targets):
+        from sklearn.model_selection import cross_val_score, ShuffleSplit
+        numSamples = features.shape[0]
+        section = 'Cross Validation'
+
+        splits = PPTools.Config.get_value(section, 'n_splits')
+        trSize = int(min(PPTools.Config.get_value(section, 'train_min'),
+                         numSamples * PPTools.Config.get_value(section, 'train_ratio')))
+        teSize = int(min(PPTools.Config.get_value(section, 'test_min'),
+                         numSamples * PPTools.Config.get_value(section, 'test_ratio')))
+        featureCount = features.shape[1]
+        cv = ShuffleSplit(n_splits=splits, train_size=trSize, test_size=teSize)
+        
+        
+        importances = np.zeros(featureCount)
+        strength = 0
+        for train, test in cv.split(features, targets):
+
+            trFeatures = features[train]
+            trTarget = targets[train]
+
+            teFeatures = features[test]
+            teTarget = targets[test]
+   
+            clf.fit(trFeatures, trTarget)
+
+            predictions = clf.predict(teFeatures)
+
+            stren = len(np.where(predictions == teTarget)[0])/teSize
+
+            strength += stren / splits
+            importances += clf.feature_importances_ / splits
+            
+        return (strength, importances)
+
+
     def do_twoClassTest(self, args):
         """Builds and evaluates a Random Forest classifier over each author and write results to a file."""
 
@@ -310,9 +390,9 @@ class MyPrompt(Cmd):
             self.activegps.featuresSelected = None
             self.do_save()
 
-        if self.activegps.featuresSelected is None:
-            self.activegps.featureSelect()
-            self.do_save()
+        # if self.activegps.featuresSelected is None:
+        #     self.activegps.featureSelect()
+        #     self.do_save()
 
         print("Generating Class Report")
 
@@ -329,23 +409,23 @@ class MyPrompt(Cmd):
         # Create csv target directory if non-existent
         
 
-        imp = None
-        for authorName, result in results.items():
-            importances = result["importances"]
-            if imp is None:
-                imp = importances
-            else:
-                imp = np.add(imp,importances)
+        # imp = None
+        # for authorName, result in results.items():
+        #     importances = result["importances"]
+        #     if imp is None:
+        #         imp = importances
+        #     else:
+        #         imp = np.add(imp,importances)
 
-        best = self.bestNFeatures(imp, self.activegps.terms, 200)
+        # best = self.bestNFeatures(imp, self.activegps.terms, 200)
 
-        #write best features
-        with open(self.resultLocation+expName+"_best_features.csv", 'w+') as csvfile:
-            writer = csv.writer(csvfile, delimiter=',',
-                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        # #write best features
+        # with open(self.resultLocation+expName+"_best_features.csv", 'w+') as csvfile:
+        #     writer = csv.writer(csvfile, delimiter=',',
+        #                     quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
-            for item in best:
-                writer.writerow(item)
+        #     for item in best:
+        #         writer.writerow(item)
 
         with open(self.resultLocation+expName+"_binary_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)
@@ -392,15 +472,19 @@ class MyPrompt(Cmd):
         conf = []
         imp = None  #cumulative feature importances
         #print("Cross Validating")
+
+        fSet = self.reFeSe(clf, features, targets)
+        features = features[:,fSet]
+        
         for train, test in cv.split(features, targets):
 
             trFeatures = features[train]
             trTarget = targets[train]   #grab the training set...
 
+            clf = self.train_binary(trFeatures, trTarget, author)   #train the model
+
             teFeatures = features[test]
             teTarget = targets[test]    #...and the test set.
-
-            clf = self.train_binary(trFeatures, trTarget, author)   #train the model
 
             if imp is None:
                 imp = clf.feature_importances_  #grab the feature importances
@@ -440,10 +524,10 @@ class MyPrompt(Cmd):
         self.activegps.featuresSelected = None
         self.do_save()
 
-    def do_featureSelect(self, args):
-        """Perform feature selection operation. This is called automatically from classifyFunctions if not run already"""   
-        self.activegps.featureSelect()
-        self.do_save()
+    # def do_featureSelect(self, args):
+    #     """Perform feature selection operation. This is called automatically from classifyFunctions if not run already"""   
+    #     self.activegps.featureSelect()
+    #     self.do_save()
 
     def do_authorsInCommon(self, args):
         for file1 in os.listdir(self.saveLocation):
