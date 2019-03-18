@@ -42,9 +42,14 @@ class MyPrompt(Cmd):
         self.gpsList = list()
         self.saveLocation = os.getcwd()+"/savedSets/"
         self.resultLocation = os.getcwd()+"/classResults/"
+        self.plotLocation = os.getcwd()+"/plots/"
 
-        if not os.path.isdir(self.saveLocation):
-            os.mkdir(self.saveLocation)
+        for direc in [self.saveLocation, self.resultLocation, self.plotLocation]:
+            try:
+                os.mkdir(direc)
+                print("directory ", direc, " Created.")
+            except FileExistsError:
+                continue
 
         for fileName in os.listdir(self.saveLocation):
             self.gpsList.append(fileName)
@@ -176,13 +181,123 @@ class MyPrompt(Cmd):
         print("Quitting.")
         raise SystemExit
 
+    def do_multiClassTest(self, args):
+        expName = self.activegps.name
+       
+        if len(args) > 0:
+            expName = args[0]
 
-    def do_classifyFunctions(self, args):
-        """Cross validate over functions committed by authors
-         in all repos. This will give misleading results 
-         unless multiple projects are analyzed"""
+        if not self.activegps.featuresDetected:
+            print("Running Feature Detection")
+            self.activegps.getFeatures()
+            self.activegps.featuresSelected = None
+            self.do_save()
 
-        """Builds and evaluates a Random Forest classifier for the chosen authors and features"""
+        if self.activegps.featuresSelected is None:
+            self.activegps.featureSelect()
+            self.do_save()
+
+        print("Generating Class Report")
+        splits = int(PPTools.Config.config["Cross Validation"]["n_splits"])
+        cv = StratifiedKFold(n_splits=splits, shuffle=True)
+        pred = []
+        tar = []
+        conf = []
+        imp = None  #cumulative feature importances
+        #print("Cross Validating")
+        features = self.activegps.counts
+        targets = self.activegps.target
+        for train, test in cv.split(features, targets):
+
+            trFeatures = features[train]
+            trTarget = targets[train]   #grab the training set...
+
+            teFeatures = features[test]
+            teTarget = targets[test]    #...and the test set.
+
+            conf = dict()
+            for author in tqdm(self.activegps.authors.keys()):
+                clf = self.train_binary(trFeatures, trTarget, author)
+                if clf.classes_[0] == author:   #Make sure the author in question is treated as the pos label...
+                    conf[author] = [prob[0] for prob in clf.predict_proba(teFeatures)]
+                else:
+                    conf[author] = [prob[1] for prob in clf.predict_proba(teFeatures)]
+
+            for i in range(0, len(teTarget)):
+                max_prob = 0
+                guess = ""
+                for author in self.activegps.authors.keys():
+                    prob = conf[author][i]
+                    if prob > max_prob:
+                        max_prob = prob
+                        guess = author
+                
+                pred.append(guess)
+
+            tar.extend(teTarget)
+
+        
+        print(classification_report(pred, tar, output_dict=False))
+        report = classification_report(pred, tar, output_dict=True)
+         
+
+        with open(self.resultLocation+expName+"_multi_report.csv", 'w+') as reportFile:
+            w = csv.writer(reportFile)
+            oneReport = list(report.items())[0]     
+            oneSample = oneReport[1]
+            header = ["Author"]
+            header.extend(oneSample.keys())
+            #print(header)
+            w.writerow(header)
+            #make classification report
+            for authorName, result in report.items():
+                row = [authorName]+[value for key, value in result.items()]
+                print(row)
+                w.writerow(row)
+
+        
+     
+    def binaryify(self, outputs, author):
+        targets = []
+        authorInd = []
+        notAuthorInd = []
+        for i in range(0,len(outputs)):  #find indeces containing examples from author in question
+            authorName = outputs[i]
+            if authorName == author:
+                targets.append(author)
+                authorInd.append(i)
+            else:
+                targets.append("not_"+author)
+                notAuthorInd.append(i)
+
+        return (np.array(targets), authorInd, notAuthorInd)
+
+    def train_binary(self, features, outputs, author):
+        
+        targets, authorInd, notAuthorInd = self.binaryify(outputs, author)
+
+        authorCount = len(authorInd)
+        notAuthorCount = len(notAuthorInd)
+
+        test_ratio = float(PPTools.Config.config['Cross Validation']['test_ratio'])
+
+        if authorCount / notAuthorCount < test_ratio:  #if author makes up less than test_ratio of the sample, reduce the sample size
+            maxNotAuthorAllowed = int((1 / test_ratio) * authorCount)
+            from random import sample
+            notAuthorInd = sample(notAuthorInd, maxNotAuthorAllowed)
+            features = features[authorInd+notAuthorInd]
+            targets = [targets[i] for i in authorInd+notAuthorInd]
+        
+        targets = np.array(targets)
+
+        clf = Classifier.Classifier().model
+        
+        #cross validate for prec and rec
+        clf.fit(features, targets)   #train the model
+        return clf #return the model
+
+    def do_twoClassTest(self, args):
+        """Builds and evaluates a Random Forest classifier over each author and write results to a file."""
 
         expName = self.activegps.name
        
@@ -205,18 +320,14 @@ class MyPrompt(Cmd):
         for authorName in tqdm(self.activegps.authors):
             results.update(
                 {authorName:
-                    self.twoClassTest(authorName, splits = 3, dictOutput=True)
+                    self.twoClassTest(authorName, dictOutput=True)
                 }
             )
 
         import csv
 
         # Create csv target directory if non-existent
-        try:
-            os.mkdir(self.resultLocation)
-            print("CSV Directory ", self.resultLocation, " Created.")
-        except FileExistsError:
-            pass
+        
 
         imp = None
         for authorName, result in results.items():
@@ -236,13 +347,13 @@ class MyPrompt(Cmd):
             for item in best:
                 writer.writerow(item)
 
-        with open(self.resultLocation+expName+"_report.csv", 'w+') as reportFile:
+        with open(self.resultLocation+expName+"_binary_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)
             oneReport = list(results.items())[0]
             oneSample = oneReport[1][oneReport[0]]
             header = ["Author"]
             header.extend(oneSample.keys())
-            print(header)
+            #print(header)
             w.writerow(header)
             #make classification report
             for authorName, result in results.items():
@@ -252,18 +363,9 @@ class MyPrompt(Cmd):
                 w.writerow(row)
 
         # Plot ROC AUC curves
-        plot_roc_auc_curves(results, self.resultLocation, expName)
+        plot_roc_auc_curves(results, self.plotLocation, expName)
 
-
-
-    def do_authorAuthTest(self, args):
-        """Find precision and recall for given author in 2 class test"""
-        if args == "":
-            print("Needs an author parameter")
-
-        print(self.twoClassTest(args))
-
-    def twoClassTest(self, author, splits = 5, dictOutput=False):
+    def twoClassTest(self, author, dictOutput=False):
         
         if author not in self.activegps.authors:
             print("Author not found")
@@ -273,42 +375,17 @@ class MyPrompt(Cmd):
             print("Running Feature Detection")
             gps.getFeatures()
         
-        features = copy.deepcopy(gps.counts)
-        #targets = copy.deepcopy(gps.target)
-        targets = list()
         
+        targets = self.activegps.target
+        features = self.activegps.counts
 
-        authorInd = []
-        
-        notAuthorInd = []
-
-        for i in range(0,len(gps.target)):  #find indeces containing examples from author in question
-            authorName = gps.target[i]
-            if authorName == author:
-                targets.append(author)
-                authorInd.append(i)
-            else:
-                targets.append("not_"+author)
-                notAuthorInd.append(i)
-
-        authorCount = len(authorInd)
-        notAuthorCount = len(notAuthorInd)
-
-        test_ratio = float(PPTools.Config.config['Cross Validation']['test_ratio'])
-
-        if authorCount / notAuthorCount < test_ratio:  #if author makes up less than test_ratio of the sample, reduce the sample size
-            maxNotAuthorAllowed = int((1 / test_ratio) * authorCount)
-            from random import sample
-            notAuthorInd = sample(notAuthorInd, maxNotAuthorAllowed)
-            features = features[authorInd+notAuthorInd]
-            targets = [targets[i] for i in authorInd+notAuthorInd]
-        
-        targets = np.array(targets)
+        targets = self.binaryify(targets, author)[0]   #make problem binary
 
         clf = Classifier.Classifier().model
         
         #cross validate for prec and rec
-
+        splits = int(PPTools.Config.config["Cross Validation"]["n_splits"])
+       
         cv = StratifiedKFold(n_splits=splits, shuffle=True)
         pred = []
         tar = []
@@ -323,7 +400,7 @@ class MyPrompt(Cmd):
             teFeatures = features[test]
             teTarget = targets[test]    #...and the test set.
 
-            clf.fit(trFeatures, trTarget)   #train the model
+            clf = self.train_binary(trFeatures, trTarget, author)   #train the model
 
             if imp is None:
                 imp = clf.feature_importances_  #grab the feature importances
@@ -340,14 +417,14 @@ class MyPrompt(Cmd):
 
         imp = np.divide(imp,splits)
 
-        from sklearn.metrics import auc, roc_curve
+        from sklearn.metrics import auc, roc_curve  #AUC computation
 
         fpr, tpr, thresholds = roc_curve(tar, conf, pos_label=author)   #...for this
         auc = auc(fpr, tpr)
 
         report = classification_report(pred, tar, output_dict=dictOutput)
+        #print(classification_report(pred, tar, output_dict=False))
         report[author]["AUC"] = auc
-        report[author]['%'] = 100 * authorCount / (authorCount+notAuthorCount)
         report["importances"] = imp
         report["fpr"] = fpr
         report["tpr"] = tpr
