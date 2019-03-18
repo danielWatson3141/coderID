@@ -47,8 +47,6 @@ class gitProfileSet:
             print("Couldn't get that one...")
         #self.compileAuthors(newRepo)    
     
-
-    
     def compileAuthors(self, authors = None):
         """Mine all repos in the repo list for commits by those in authors. None for get all"""
         for repo in self.repos:
@@ -67,15 +65,16 @@ class gitProfileSet:
                 
                 if authors is not None and author not in authors:
                     continue
-                tipe = commitType.categorize(commit, langList=gitProfileSet.langList)
+                #tipe = commitType.categorize(commit, langList=gitProfileSet.langList)
 
-                if tipe not in tipeCounts:
-                    tipeCounts.update({tipe: 0})
-                count = tipeCounts.get(tipe)
-                tipeCounts.update({tipe: count+1})
+                #if tipe not in tipeCounts:
+                #    tipeCounts.update({tipe: 0})
+                #count = tipeCounts.get(tipe)
+                #tipeCounts.update({tipe: count+1})
 
 
-                if tipe is commitType.FEATURE:
+                #if tipe is commitType.FEATURE:
+                if True:    #for now, not worried about commit type
                     if author.name not in self.authors:
                         self.authors.update({author.name:gitAuthor(author)})
                         #print("Found new author: "+author.name)
@@ -121,7 +120,7 @@ class gitProfileSet:
                     
                     
             print(str("finished"+str(miner._path_to_repo)))
-            print("types: "+str(tipeCounts))
+            print(self)
             #print(authorsWithEnoughDocs+" authors with enough code so far.")
 
 
@@ -158,7 +157,9 @@ class gitProfileSet:
             authors_seen += 1
 
             for fun in author.functions:
+
                 fns_seen += 1
+
                 fn_str = '\n'.join(fun.values())
 
                 #whitespace fn's still getting in. This will catch for that.
@@ -169,15 +170,16 @@ class gitProfileSet:
                 self.target.append(author.name)
                 # Function-string level features
                 # processing 11 less functions now
-                charLevelFeatures = vstack([charLevelFeatures,
-                                            featureExtractors.featureExtractors.characterLevel(fn_str)])
                 try:
                     tu = PPTools.Tokenize.get_tu(fn_str)
                     tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
-                    inputs.append(PPTools.Tokenize.tokensToText(tokens))
+                    # inputs.append(PPTools.Tokenize.tokensToText(tokens))
 
-                    # generating the AST
-                    token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True)
+                    import copy
+                    # getting the token pointer-related errors; comment out for now
+                    token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True) # can't use this for inputs, but need to ignore comments for AST features
+                    inputs.append(token_text)  # Convert to text
+
                     token_text = token_text.split(" ")
                     ast_feature_ext = ASTFeatureExtractor.ASTFeatures(token_text)
                     ast_feature_ext.traverse()
@@ -205,13 +207,27 @@ class gitProfileSet:
                     for node_type in node_type_depths:
                         node_type_depths[node_type].append(0.0)
                     fns_failed += 1
-                    continue
+                    #continue
 
-                # Token-level features
-                # if tokFeatures is None:
-                #     tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
-                # else:
-                #     tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
+
+                """
+                Bigram matrix:
+                Create a dok matrix (Dictionary Of Keys based sparse matrix) here
+                """
+                # Function-string level features
+                if charLevelFeatures is None:
+                    charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
+                else:
+                    charLevelFeatures = vstack([charLevelFeatures,
+                                                featureExtractors.featureExtractors.characterLevel(fn_str)])
+
+
+
+                if tokFeatures is None:
+                    tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
+                else:
+                    tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
+
                 del tokens, token_text
             
         inputs = np.array(inputs)
@@ -227,7 +243,7 @@ class gitProfileSet:
                                         use_idf=False)
 
         self.counts = hstack([charLevelFeatures, depths, tokFeatures], format = 'csr')
-        self.terms = charfeatureNames + depths_names #+ tokfeatureNames
+        self.terms = charfeatureNames + depths_names + tokfeatureNames
 
         # adding the node_type_depths
         node_type_depth_names = node_type_depths.keys()
@@ -271,7 +287,8 @@ class gitProfileSet:
 
         if self.featuresSelected is not None:
             print("Features selected already, skipping.")
-        
+        else:
+            print("Selecting features...")
 
         total_num_features = self.counts.shape[1]
         print("Number of features before selection: {}".format(total_num_features))
@@ -292,8 +309,7 @@ class gitProfileSet:
 
         previous = 0
         strength = .01
-        
-        
+
         nFeatures = total_num_features
         features = self.counts
         terms = self.terms
@@ -312,7 +328,7 @@ class gitProfileSet:
             from operator import itemgetter
             match = zip(range(0, nFeatures), importances)            
             
-            nFeatures = int(reductionFactor*nFeatures)
+            nFeatures = int((1-reductionFactor)*nFeatures)
             
             previousFeatures = features
             previousTerms = terms
@@ -333,53 +349,7 @@ class gitProfileSet:
         frac_selected = 100 * n_relevant_features / total_num_features
         print("Percentage of features selected: {:.2f}%".format(frac_selected))
 
-    def evaluate(self, clf, features, targets):
-        from sklearn.model_selection import cross_val_score, ShuffleSplit
-        numSamples = features.shape[0]
-        section = 'Cross Validation'
-
-        splits = PPTools.Config.get_value(section, 'n_splits')
-        trSize = int(min(PPTools.Config.get_value(section, 'train_min'),
-                         numSamples * PPTools.Config.get_value(section, 'train_ratio')))
-        teSize = int(min(PPTools.Config.get_value(section, 'test_min'),
-                         numSamples * PPTools.Config.get_value(section, 'test_ratio')))
-        featureCount = features.shape[1]
-        cv = ShuffleSplit(n_splits=splits, train_size=trSize, test_size=teSize)
-        
-        
-        importances = np.zeros(featureCount)
-        strength = 0
-        for train, test in cv.split(features, targets):
-
-            trFeatures = features[train]
-            trTarget = targets[train]
-
-            teFeatures = features[test]
-            teTarget = targets[test]
-   
-            clf.fit(trFeatures, trTarget)
-
-            predictions = clf.predict(teFeatures)
-
-            stren = len(np.where(predictions == teTarget)[0])/teSize
-
-            strength += stren / splits
-            importances += clf.feature_importances_ / splits
-            
-
-        return (strength, importances)
-
-    def testProgrammerTransparency (self, authors = None):
-        results = dict()
-        #{name: (pr, re, f1)}
-        if authors == None:
-            authors = [author.name for author in self.authors]
-
-        for author in authors:
-            results.update({author: 0})
-
-        return results
-        
+    
     def functionToString(self, lines):
         textLines = list(len(lines))
 
