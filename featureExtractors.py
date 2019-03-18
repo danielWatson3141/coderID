@@ -223,23 +223,3 @@ class featureExtractors:
     @staticmethod
     def astLevel(fn_str):
         pass
-
-
-
-if __name__ == "__main__":
-
-    #print(featureExtractors.charfeatureNames)
-    #print(featureExtractors.characterLevel(tst))
-
-    filename = os.getcwd() + "/test.c"
-    #tokens = PPTools.Tokenize.cpp(filename)
-    #print(featureExtractors.tokfeatureNames)
-    #print(featureExtractors.tokenLevel(tokens))
-
-    tu = PPTools.Tokenize.cpp(filename)
-    node = tu.cursor
-    print('Translation unit: ' + tu.spelling)
-    for c in node.get_children():
-        msg = 'Found %s [line=%s, col=%s]'
-        print(msg.format(
-            node.spelling, node.location.line, node.location.column))

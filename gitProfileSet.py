@@ -138,6 +138,7 @@ class gitProfileSet:
         node_bigrams = []
         depths = None
         depths_names = ['max_ast_node_depth', 'avg_ast_node_depth']
+        node_type_depths = Counter()
         code_unigrams = []
 
         self.target = []
@@ -145,7 +146,7 @@ class gitProfileSet:
         charLevelFeatures = None
         tokfeatureNames = featureExtractors.featureExtractors.tokfeatureNames
         tokFeatures = None
-        fns_seens = 0
+        fns_seen = 0
         fns_failed = 0
         print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
@@ -156,6 +157,8 @@ class gitProfileSet:
             authors_seen += 1
 
             for fun in author.functions:
+
+                fns_seen += 1
 
                 fn_str = '\n'.join(fun.values())
 
@@ -168,7 +171,6 @@ class gitProfileSet:
                 # Function-string level features
                 # processing 11 less functions now
                 try:
-                    fns_seens += 1
                     tu = PPTools.Tokenize.get_tu(fn_str)
                     tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
                     # inputs.append(PPTools.Tokenize.tokensToText(tokens))
@@ -182,23 +184,28 @@ class gitProfileSet:
                     ast_feature_ext = ASTFeatureExtractor.ASTFeatures(token_text)
                     ast_feature_ext.traverse()
 
+                    # Integrating the AST features
                     node_types.append(ast_feature_ext.node_types)
                     node_bigrams.append(ast_feature_ext.bigrams_text)
                     depths = vstack([depths, ast_feature_ext.depths])
 
-                    """
-                    depth matrix here
-                    Function fails to parse -> empty matrix?
-                    """
+                    # Adding in all the node type depths from current function
+                    for node_type in ast_feature_ext.type_depths:
+                        if node_type not in node_type_depths:
+                            node_type_depths[node_type] = [0.0] * (fns_seen - 1)
+                        node_type_depths[node_type].append(ast_feature_ext.type_depths[node_type])
 
-                except Exception as e:
+                    # Updating the node types that were not seen in this function but were seen before
+                    for node_type in node_type_depths:
+                        if node_type not in ast_feature_ext.type_depths:
+                            node_type_depths[node_type].append(0.0)
+
+                except:
                     node_bigrams.append("")
                     node_types.append("")
-                    """
-                    max_depths.append(0)
-                    avg_depths.append(0)
-                    """
                     depths = vstack([depths, csr_matrix([0,0], shape=(1, 2))])
+                    for node_type in node_type_depths:
+                        node_type_depths[node_type].append(0.0)
                     fns_failed += 1
                     #continue
 
@@ -215,7 +222,7 @@ class gitProfileSet:
                                                 featureExtractors.featureExtractors.characterLevel(fn_str)])
 
 
-                #Token-level features
+
                 if tokFeatures is None:
                     tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
                 else:
@@ -227,8 +234,7 @@ class gitProfileSet:
         node_types = np.array(node_types)
         node_bigrams = np.array(node_bigrams)
 
-        print(100 * fns_failed / fns_seens)
-        # TODO: abstract this out since it gets used a lot.
+        print("Functions successfully parsed: {:.2f}%".format(100 * (1 - fns_failed / fns_seen)))
         print("Vectorizing...")
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S+",
                                        decode_error="ignore", lowercase=False)
@@ -236,16 +242,17 @@ class gitProfileSet:
                                         decode_error="ignore", lowercase=False,
                                         use_idf=False)
 
-        # TODO: add avg depths and max depths here
         self.counts = hstack([charLevelFeatures, depths, tokFeatures], format = 'csr')
         self.terms = charfeatureNames + depths_names + tokfeatureNames
 
-        """
-        print(self.counts.shape)
-        print(len(inputs))
-        print(len(self.target))
-        print(fns_seens)
-        """
+        # adding the node_type_depths
+        node_type_depth_names = node_type_depths.keys()
+        for node_type in node_type_depth_names:
+            depth_vector = np.array(node_type_depths[node_type]).reshape((fns_seen, 1))
+            depth_vector = csr_matrix(depth_vector, shape = (fns_seen, 1))
+            self.counts = hstack([self.counts, depth_vector], format='csr')
+        self.terms += node_type_depth_names
+        del node_type_depth_names
 
         # Tokens TFIDF
         self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
@@ -254,8 +261,7 @@ class gitProfileSet:
 
         # AST Node Types TF and TFIDF
         self.counts = hstack([self.counts, vectorizer.fit_transform(node_types),
-                              vectorizer_tf.fit_transform(node_types)],
-                             format='csr')
+                              vectorizer_tf.fit_transform(node_types)], format='csr')
         self.terms += vectorizer.get_feature_names() + vectorizer_tf.get_feature_names()
 
         # AST Node Bigrams TF
@@ -270,7 +276,6 @@ class gitProfileSet:
         del inputs, node_types, code_unigrams, node_bigrams
 
         self.target = np.array(self.target)
-
         self.featuresDetected = True
             #should fit feature detector here
             #then pass it down
