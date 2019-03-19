@@ -351,6 +351,8 @@ class MyPrompt(Cmd):
         report["importances"] = imp
         report["fpr"] = fpr
         report["tpr"] = tpr
+        report["targets"] = list(map(lambda label: 1 if label == author else 0, tar))
+        report["predictions"] = conf
 
         return report
 

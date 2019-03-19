@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import interp
-from sklearn.metrics import auc
+from sklearn.metrics import auc, roc_curve
 
 # Generates distinct colours given a number. Returns black if the index is too high
 def get_color(index):
@@ -21,12 +21,21 @@ def get_avg_roc_auc(results):
     mean_tpr = np.zeros_like(all_fpr)
     weighted_mean_tpr = np.zeros_like(all_fpr)
 
+    targets = []
+    predictions = []
     for author, metrics in results.items():
         mean_tpr += interp(all_fpr, metrics["fpr"], metrics["tpr"])
-        weighted_mean_tpr += interp(all_fpr, metrics["fpr"], metrics["tpr"]) * metrics[author]["%"]
+        weighted_mean_tpr += interp(all_fpr, metrics["fpr"], metrics["tpr"]) * (metrics[author]["%"] / 100)
+
+        targets.extend(metrics["targets"])
+        predictions.extend(metrics["predictions"])
 
     # Average out results
     mean_tpr /= len(results)
+
+    # Compute micro-average ROC
+    micro_fpr, micro_tpr, _ = roc_curve(targets, predictions)
+    #import pdb; pdb.set_trace();
     averages = {
         "unweighted": {
             "fpr": all_fpr,
@@ -37,6 +46,11 @@ def get_avg_roc_auc(results):
             "fpr": all_fpr,
             "tpr": weighted_mean_tpr,
             "AUC": auc(all_fpr, weighted_mean_tpr),
+        },
+        "micro": {
+            "fpr" : micro_fpr,
+            "tpr": micro_tpr,
+            "AUC": auc(micro_fpr, micro_tpr),
         },
     }
     return averages
@@ -60,19 +74,8 @@ def plot_author_roc_auc_curve(author, fpr, tpr, roc_auc, color='darkorange', dir
     plot_filepath = "{}/{}_{}_ROC.png".format(directory, session_name, author)
     plt.savefig(plot_filepath)
 
-
-def plot_roc_auc_curves(results, directory="classResults", session_name=""):
-    # Plot individual author ROC curves
-    for i, (author, metrics) in enumerate(results.items()):
-        plot_author_roc_auc_curve(
-            author, metrics["fpr"], metrics["tpr"], metrics[author]["AUC"], get_color(i),
-            directory=directory, session_name=session_name
-        )
-
+def plot_average_roc_auc_curve(roc_averages):
     lw = 2
-    plt.figure(figsize=(10, 10))
-
-    roc_averages = get_avg_roc_auc(results)
     # Plot macro average ROC
     plt.plot(
         roc_averages["unweighted"]["fpr"], roc_averages["unweighted"]["tpr"], color="deeppink", lw=lw,
@@ -85,7 +88,43 @@ def plot_roc_auc_curves(results, directory="classResults", session_name=""):
         label="weighted average ROC curve (area = {0:0.1f})".format(roc_averages["weighted"]["AUC"]),
         linestyle=":",
     )
+    ## Plot micro average ROC
+    plt.plot(
+        roc_averages["micro"]["fpr"], roc_averages["micro"]["tpr"], color="green", lw=lw,
+        label="micro average ROC curve (area = {0:0.1f})".format(roc_averages["micro"]["AUC"]),
+        linestyle=":",
+    )
+
+
+def plot_roc_auc_curves(results, directory="classResults", session_name=""):
+    lw = 2
+    # Plot individual author ROC curves
+    for i, (author, metrics) in enumerate(results.items()):
+        plot_author_roc_auc_curve(
+            author, metrics["fpr"], metrics["tpr"], metrics[author]["AUC"], get_color(i),
+            directory=directory, session_name=session_name
+        )
+
+    roc_averages = get_avg_roc_auc(results)
+
+    # Plot average ROC curves
+    plt.figure()
+    plot_average_roc_auc_curve(roc_averages)
+    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('All ROC Curves for {}'.format(session_name))
+    plt.legend(loc="lower right")
+
+    average_plot_filepath = "{}/{}_Average_ROC.png".format(directory, session_name)
+    plt.savefig(average_plot_filepath)
+
     # Plot all ROC curves
+    plt.figure(figsize=(10, 10))
+    plot_average_roc_auc_curve(roc_averages)
+
     for i, (author, metrics) in enumerate(results.items()):
         plt.plot(
             metrics["fpr"], metrics["tpr"], color=get_color(i), lw=lw,
