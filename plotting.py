@@ -22,9 +22,11 @@ def get_avg_roc_auc(results):
     weighted_mean_tpr = np.zeros_like(all_fpr)
 
     samples = 0
+    targets = []
+    predictions = []
     # compute total number of samples
     for author, metrics in results.items():
-        samples += metrics["support"]
+        samples += metrics[author]["support"]
 
     for author, metrics in results.items():
         mean_tpr += interp(all_fpr, metrics["fpr"], metrics["tpr"])
