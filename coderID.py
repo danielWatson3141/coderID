@@ -218,11 +218,13 @@ class MyPrompt(Cmd):
 
             conf = dict()
             for author in tqdm(self.activegps.authors.keys()):
-                clf = self.train_binary(trFeatures, trTarget, author)
+                clf = Classifier.Classifier().model
+                auth_trFeatures = self.reFeSe(clf, trFeatures, trTarget)    #feature select for the athor
+                clf = self.train_binary(trFeatures[:,auth_trFeatures], trTarget, author)
                 if clf.classes_[0] == author:   #Make sure the author in question is treated as the pos label...
-                    conf[author] = [prob[0] for prob in clf.predict_proba(teFeatures)]
+                    conf[author] = [prob[0] for prob in clf.predict_proba(teFeatures[:,auth_trFeatures])]
                 else:
-                    conf[author] = [prob[1] for prob in clf.predict_proba(teFeatures)]
+                    conf[author] = [prob[1] for prob in clf.predict_proba(teFeatures[:,auth_trFeatures])]
 
             for i in range(0, len(teTarget)):
                 max_prob = 0
@@ -397,7 +399,7 @@ class MyPrompt(Cmd):
         print("Generating Class Report")
 
         results = dict()
-        for authorName in tqdm(self.activegps.authors):
+        for authorName in tqdm(self.activegps.authors.keys()):
             results.update(
                 {authorName:
                     self.twoClassTest(authorName, dictOutput=True)
@@ -526,10 +528,66 @@ class MyPrompt(Cmd):
         self.activegps.featuresSelected = None
         self.do_save()
 
-    # def do_featureSelect(self, args):
-    #     """Perform feature selection operation. This is called automatically from classifyFunctions if not run already"""   
-    #     self.activegps.featureSelect()
-    #     self.do_save()
+    def do_multiOutputTest(self, args):
+        expName = self.activegps.name
+       
+        if len(args) > 0:
+            expName = args[0]
+
+        if not self.activegps.featuresDetected:
+            print("Running Feature Detection")
+            self.activegps.getFeatures()
+            self.activegps.featuresSelected = None
+            self.do_save()
+
+        print("Generating Class Report")
+        splits = int(PPTools.Config.config["Cross Validation"]["n_splits"])
+        cv = StratifiedKFold(n_splits=splits, shuffle=True)
+        pred = []
+        tar = []
+        imp = None  #cumulative feature importances
+        #print("Cross Validating")
+        features = self.activegps.counts
+        targets = self.activegps.target
+        for train, test in list(cv.split(features, targets)):
+
+            trFeatures = features[train]
+            trTarget = targets[train]   #grab the training set...
+
+            teFeatures = features[test]
+            teTarget = targets[test]    #...and the test set.
+
+            #train multi-output classifier
+            clf = Classifier.Classifier().model
+            
+            selectedFeatures = self.reFeSe(clf, trFeatures, trTarget)
+            trFeatures = trFeatures[:,selectedFeatures]    #feature select for the athor
+            
+            clf.fit(trFeatures[:,selectedFeatures], trTarget)
+
+            pred.extend(clf.predict(teFeatures[:,selectedFeatures]))
+            tar.extend(teTarget)
+
+        
+        print(classification_report(pred, tar, output_dict=False))
+        report = classification_report(pred, tar, output_dict=True)
+         
+
+        with open(self.resultLocation+expName+"_multi_report.csv", 'w+') as reportFile:
+            w = csv.writer(reportFile)
+            oneReport = list(report.items())[0]     
+            oneSample = oneReport[1]
+            header = ["Author"]
+            header.extend(oneSample.keys())
+            #print(header)
+            w.writerow(header)
+            #make classification report
+            for authorName, result in report.items():
+                row = [authorName]+[value for key, value in result.items()]
+                print(row)
+                w.writerow(row)
+
+
 
     def do_authorsInCommon(self, args):
         for file1 in os.listdir(self.saveLocation):
