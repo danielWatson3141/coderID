@@ -410,7 +410,6 @@ class MyPrompt(Cmd):
 
         # Create csv target directory if non-existent
         
-
         # imp = None
         # for authorName, result in results.items():
         #     importances = result["importances"]
@@ -545,11 +544,11 @@ class MyPrompt(Cmd):
         cv = StratifiedKFold(n_splits=splits, shuffle=True)
         pred = []
         tar = []
-        imp = None  #cumulative feature importances
+        imp = []  #cumulative feature importances
         #print("Cross Validating")
         features = self.activegps.counts
         targets = self.activegps.target
-        for train, test in list(cv.split(features, targets)):
+        for train, test in tqdm(list(cv.split(features, targets))):
 
             trFeatures = features[train]
             trTarget = targets[train]   #grab the training set...
@@ -563,7 +562,7 @@ class MyPrompt(Cmd):
             selectedFeatures = self.reFeSe(clf, trFeatures, trTarget)
             trFeatures = trFeatures[:,selectedFeatures]    #feature select for the athor
             
-            clf.fit(trFeatures[:,selectedFeatures], trTarget)
+            clf.fit(trFeatures, trTarget)
 
             pred.extend(clf.predict(teFeatures[:,selectedFeatures]))
             tar.extend(teTarget)
