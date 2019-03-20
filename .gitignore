@@ -8,5 +8,6 @@
 /savedSets/
 /classResults/
 /plots/
+/repos/
 *.token
 ghmining*.json
