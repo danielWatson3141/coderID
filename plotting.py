@@ -61,7 +61,7 @@ def get_avg_roc_auc(results):
     return averages
 
 
-def plot_author_roc_auc_curve(author, fpr, tpr, roc_auc, color='darkorange', directory="classResults", session_name=""):
+def plot_author_roc_auc_curve(author, fpr, tpr, roc_auc, color='darkorange', directory="plots", session_name=""):
     plt.figure()
     lw = 2
     plt.plot(
@@ -102,7 +102,7 @@ def plot_average_roc_auc_curve(roc_averages):
     )
 
 
-def plot_roc_auc_curves(results, directory="classResults", session_name=""):
+def plot_roc_auc_curves(results, directory="plots", session_name=""):
     lw = 2
     # Plot individual author ROC curves
     for i, (author, metrics) in enumerate(results.items()):
@@ -151,7 +151,7 @@ def plot_roc_auc_curves(results, directory="classResults", session_name=""):
 
 # Plots a histogram of function lengths in terms of lines of code given a list of functions
 # functions is a list of dictionaries mapping tuples of (commitHash, file, lineNumber) to strings
-def plot_function_length_histogram(functions, directory="classResults", session_name=""):
+def plot_function_length_histogram(functions, directory="plots", session_name=""):
     function_lengths = [len(function) for function in functions]
     bin_size = 10
     bins = np.arange(min(function_lengths), max(function_lengths) + bin_size, bin_size)
