@@ -259,7 +259,6 @@ class MyPrompt(Cmd):
                 w.writerow(row)
 
         
-     
     def binaryify(self, outputs, author):
         targets = []
         authorInd = []
@@ -307,8 +306,6 @@ class MyPrompt(Cmd):
         previousBest = range(0, features.shape[1])
         best = None
         nFeatures = features.shape[1]
-
-        retFeatures = features
 
         #reduce sample size to decrease training time
         maxSamples = int(PPTools.Config.config["Feature Selection"]["max_samples"])
@@ -816,6 +813,24 @@ class MyPrompt(Cmd):
     def do_testCommitClassification(self, args):
         testCommitClassification.test_heuristic_function()
 
+    def do_run(self, args):
+        """run a provided bash/coderID script file. Bash lines should start with /"""
+        import subprocess
+        if os.path.isfile(args):
+            with open(args, 'r') as f:
+                for line in f:
+                    try:
+                        if line[0] == '/':
+                            process = subprocess.Popen(line[1:], stdout=subprocess.PIPE, shell=True)
+                        elif line.isspace():
+                            continue
+                        else:
+                            self.onecmd(line)
+                    except:
+                        print("invalid command: "+line)
+        else:
+            print("please provide a coderID script file.")
+
     
 def memory_limit():
     import resource
@@ -838,7 +853,13 @@ if __name__ == '__main__':
         prompt = MyPrompt()
         prompt.prompt = 'coderID> '
         prompt.do_init()
+        if len(sys.argv) > 1 and os.path.isfile(sys.argv[1]):
+            print("Running Script File...")
+            prompt.do_run(sys.argv[0])
+
         prompt.cmdloop('Starting prompt...')
+        
+
     except MemoryError:
         sys.stderr.write('\n\nERROR: Memory Exception\n')
         sys.exit(1)

@@ -4,7 +4,6 @@
 /gitsamples/
 /gcj1/
 *.pyc
-*.cid
 *.csv*
 /savedSets/
 /classResults/

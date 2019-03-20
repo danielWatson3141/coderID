@@ -88,7 +88,6 @@ class gitProfileSet:
                         newSC = list()
                         leDiff = repository.parse_diff(mod.diff)
                         for num, line in leDiff["added"]:
-                            author.lines.update({(commit.hash,mod.new_path,num):line})
                             newSC.append(line)
 
                         from lizard import analyze_file as liz
@@ -110,6 +109,7 @@ class gitProfileSet:
                                 while(leDiff["added"][lineIndex][0]<fun.end_line+1):
                                     last_lineStr = lineStr
                                     lineStr = leDiff["added"][lineIndex][1]
+                                    
                                     if not started and re.search(arg_list_termination, "".join([lineStr,last_lineStr])):
                                         started = True
                                         
@@ -121,6 +121,7 @@ class gitProfileSet:
                             if started and len(newFun) > 1 and '}' in lineStr + last_lineStr:
                                 # print('fun====================')
                                 # print('\n'.join(newFun.values()))
+                                author.lines.update(newFun)
                                 author.functions.append(newFun) 
                                 # print('fun====================')
                             # else:
