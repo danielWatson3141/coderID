@@ -8,5 +8,6 @@
 *.csv*
 /savedSets/
 /classResults/
+/plots/
 *.token
 ghmining*.json

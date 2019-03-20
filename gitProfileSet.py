@@ -58,22 +58,13 @@ class gitProfileSet:
             repository = pydriller.GitRepository(repo)
             print("Scanning repo: "+miner._path_to_repo)
             
-            tipeCounts = dict()
 
             for commit in tqdm(miner.traverse_commits()):
                 author = commit.author
                 
                 if authors is not None and author not in authors:
                     continue
-                #tipe = commitType.categorize(commit, langList=gitProfileSet.langList)
-
-                #if tipe not in tipeCounts:
-                #    tipeCounts.update({tipe: 0})
-                #count = tipeCounts.get(tipe)
-                #tipeCounts.update({tipe: count+1})
-
-
-                #if tipe is commitType.FEATURE:
+                
                 if True:    #for now, not worried about commit type
                     if author.name not in self.authors:
                         self.authors.update({author.name:gitAuthor(author)})
@@ -94,36 +85,53 @@ class gitProfileSet:
                         author.files.add(mod.new_path)
                         #parse diff and add lines to list
                         
+                        newSC = list()
                         leDiff = repository.parse_diff(mod.diff)
                         for num, line in leDiff["added"]:
                             author.lines.update({(commit.hash,mod.new_path,num):line})
+                            newSC.append(line)
 
-                        #extract functions with lizard
-                        funs = mod._function_list
+                        from lizard import analyze_file as liz
+                        fileInfo = liz.analyze_source_code(mod.new_path, "\n".join(newSC))
 
                         #maintain list of dicts containing the source code of specific functions. Same format as for lines
                         lineIndex = 0
-                        for fun in funs:
+                        
+                        for fun in fileInfo.function_list:
+                            #Make sure these appear in the "function"
+                            arg_list_termination = r"\)\s*{"
+                            started = False
                             newFun = dict()
+                            lineStr = ""
                             try:
                                 while(leDiff["added"][lineIndex][0]<fun.start_line):
                                     lineIndex+=1
                             
                                 while(leDiff["added"][lineIndex][0]<fun.end_line+1):
-                                    newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):leDiff["added"][lineIndex][1]})
+                                    last_lineStr = lineStr
+                                    lineStr = leDiff["added"][lineIndex][1]
+                                    if not started and re.search(arg_list_termination, "".join([lineStr,last_lineStr])):
+                                        started = True
+                                        
+                                    newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):lineStr})
                                     lineIndex+=1
                             except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
                                 pass
-                            if len(newFun) > 1:
-                                author.functions.append(newFun)    
 
-                    
-                    
+                            if started and len(newFun) > 1 and '}' in lineStr + last_lineStr:
+                                # print('fun====================')
+                                # print('\n'.join(newFun.values()))
+                                author.functions.append(newFun) 
+                                # print('fun====================')
+                            # else:
+                                # print("no_fun==================")
+                                # print('\n'.join(newFun.values()))
+                                # print("no_fun==================")
+                                
+   
             print(str("finished"+str(miner._path_to_repo)))
             print(self)
             #print(authorsWithEnoughDocs+" authors with enough code so far.")
-
-
 
     def displayAuthors(self):
         for value in self.authors.values():
