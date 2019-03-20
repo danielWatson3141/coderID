@@ -17,7 +17,7 @@ def get_avg_roc_auc(results):
     # aggregate all fpr for all authors
     all_fpr = np.unique(np.concatenate([result["fpr"] for _, result in results.items()]))
 
-    # Interpolate all ROC curves that these points
+    # Interpolate all ROC curves at these points
     mean_tpr = np.zeros_like(all_fpr)
     weighted_mean_tpr = np.zeros_like(all_fpr)
 
@@ -40,7 +40,7 @@ def get_avg_roc_auc(results):
 
     # Compute micro-average ROC
     micro_fpr, micro_tpr, _ = roc_curve(targets, predictions)
-    #import pdb; pdb.set_trace();
+
     averages = {
         "unweighted": {
             "fpr": all_fpr,
@@ -78,6 +78,7 @@ def plot_author_roc_auc_curve(author, fpr, tpr, roc_auc, color='darkorange', dir
 
     plot_filepath = "{}/{}_{}_ROC.png".format(directory, session_name, author)
     plt.savefig(plot_filepath)
+
 
 def plot_average_roc_auc_curve(roc_averages):
     lw = 2

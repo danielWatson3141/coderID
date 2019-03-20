@@ -600,6 +600,13 @@ class MyPrompt(Cmd):
         self.activegps.displayAuthors()
         #print(self.activegps)
 
+    def do_displayAndPlotFunctionLengths(self, args):
+        """
+        Displays total number of functions, LOC, and average function LOC.
+        Also plots a histogram of function length by LOC
+        """
+        self.activegps.plotFunctionLengths()
+
     def do_loadGitRepos(self, args):
         """Loads a directory args[0] of git repos, as many as args[1] def:inf"""
         args = args.split(" ")
