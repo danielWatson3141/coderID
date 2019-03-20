@@ -158,7 +158,7 @@ def plot_function_length_histogram(functions, directory="classResults", session_
 
     # Plot histogram
     plt.figure()
-    plt.hist(function_lengths, edgecolor='black')
+    plt.hist(function_lengths, bins=bins, edgecolor='black')
     plt.title("Lines of Code of Classified Functions")
     plt.ylabel("Frequency")
     plt.xlabel("Lines of Code")
