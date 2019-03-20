@@ -119,20 +119,12 @@ class gitProfileSet:
                                 pass
 
                             if started and len(newFun) > 1 and '}' in lineStr + last_lineStr:
-                                # print('fun====================')
-                                # print('\n'.join(newFun.values()))
                                 author.lines.update(newFun)
-                                author.functions.append(newFun) 
-                                # print('fun====================')
-                            # else:
-                                # print("no_fun==================")
-                                # print('\n'.join(newFun.values()))
-                                # print("no_fun==================")
+                                author.functions.append(self.functionToString(newFun)) 
                                 
    
             print(str("finished"+str(miner._path_to_repo)))
             print(self)
-            #print(authorsWithEnoughDocs+" authors with enough code so far.")
 
     def displayAuthors(self):
         for value in self.authors.values():
@@ -177,7 +169,7 @@ class gitProfileSet:
 
                 fns_seen += 1
 
-                fn_str = '\n'.join(fun.values())
+                fn_str = fun #due to refactor
 
                 #whitespace fn's still getting in. This will catch for that.
                 if fn_str.isspace() or fn_str == '':
@@ -298,13 +290,7 @@ class gitProfileSet:
             #then pass it down
     
     def functionToString(self, lines):
-        textLines = list(len(lines))
-
-        for lineInfo, line in lines:
-            cHash, fil, lnum = lineInfo
-            textLines[lnum] = line
-
-        return "\n".join(textLines)
+        return "\n".join(lines.values())
 
     
     def __str__(self):
@@ -319,7 +305,7 @@ class gitAuthor:
             self.email = dev.email
         self.commits = set() #store with repo+commitHash
         self.files = set()
-        self.functions = list() #list of dicts. Each dict represents a function. str same as self.lines 
+        self.functions = list() #list of str
         self.lines = dict() #key: {commitHash,file.cpp,lineNumber} value: literal code
         self.repos = set()
     

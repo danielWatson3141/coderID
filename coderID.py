@@ -46,11 +46,9 @@ class MyPrompt(Cmd):
         self.plotLocation = os.getcwd()+"/plots/"
 
         for direc in [self.saveLocation, self.resultLocation, self.plotLocation]:
-            try:
+            if not os.path.exists(direc):
                 os.mkdir(direc)
                 print("directory ", direc, " Created.")
-            except FileExistsError:
-                continue
 
         for fileName in os.listdir(self.saveLocation):
             self.gpsList.append(fileName)
@@ -737,10 +735,7 @@ class MyPrompt(Cmd):
                 total = 0
 
                 for fun in author.functions:
-                    ((hsh, fil, line),code) = next(iter(fun.items())) #Python is whack man.
-                    print(fil+":")
-                    for line in fun.values():
-                        print(line)
+                        print(fun)
                 print()
                 return
                 
