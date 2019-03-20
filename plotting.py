@@ -153,10 +153,12 @@ def plot_roc_auc_curves(results, directory="classResults", session_name=""):
 # functions is a list of dictionaries mapping tuples of (commitHash, file, lineNumber) to strings
 def plot_function_length_histogram(functions, directory="classResults", session_name=""):
     function_lengths = [len(function) for function in functions]
+    bin_size = 10
+    bins = np.arange(min(function_lengths), max(function_lengths) + bin_size, bin_size)
 
     # Plot histogram
     plt.figure()
-    plt.hist(function_lengths, edgecolor='black')
+    plt.hist(function_lengths, bins=bins, edgecolor='black')
     plt.title("Lines of Code of Classified Functions")
     plt.ylabel("Frequency")
     plt.xlabel("Lines of Code")
