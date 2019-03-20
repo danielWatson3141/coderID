@@ -22,7 +22,7 @@ from sklearn.model_selection import cross_val_score,ShuffleSplit, StratifiedKFol
 from sklearn import metrics, utils
 from sklearn.metrics import classification_report
 
-from plotting import plot_roc_auc_curves
+from plotting import plot_roc_auc_curves, plot_function_length_histogram
 
 
 
@@ -662,7 +662,28 @@ class MyPrompt(Cmd):
         Displays total number of functions, LOC, and average function LOC.
         Also plots a histogram of function length by LOC
         """
-        self.activegps.plotFunctionLengths()
+        # Calculate metrics on functions
+        author_functions = self.activegps.getAllFunctions()
+        num_functions = len(author_functions)
+        num_lines_of_code = 0
+        for function in author_functions:
+            num_lines_of_code += len(function)
+
+        avg_lines_of_code = num_lines_of_code / num_functions
+
+        # Print function metrics
+        table_template = "{0:35}{1:8}"
+        print(table_template.format("Total number of functions:", num_functions))
+        print(table_template.format("Total lines of code:", num_lines_of_code))
+        print(table_template.format("Avg lines of code per function:", round(avg_lines_of_code, 2)))
+
+        # Plot function length histogram
+        expName = self.activegps.name
+        if len(args) > 0:
+            expName = args[0]
+
+        plot_function_length_histogram(author_functions, self.plotLocation, expName)
+
 
     def do_loadGitRepos(self, args):
         """Loads a directory args[0] of git repos, as many as args[1] def:inf"""
