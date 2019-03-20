@@ -1,0 +1,4 @@
+session,report_filepath
+pion,sample_reports/piontest_report.csv
+caffe,sample_reports/caffetest_report.csv
+hostboost,sample_reports/hostboot_report.csv
