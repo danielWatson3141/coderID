@@ -26,8 +26,23 @@
         "float",
         "double",
         "bool",
-        "void"
+        "void",
+        "const"
     ]
-  }
+  },
+  "Keywords" : [
+    "if",
+    "else",
+    "while",
+    "for",
+    "continue",
+    "goto",
+    "switch",
+    "case",
+    "return",
+    "break",
+    "try",
+    "catch"
+  ]
 
 }

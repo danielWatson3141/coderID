@@ -149,6 +149,7 @@ class gitProfileSet:
         tokFeatures = None
         fns_seen = 0
         fns_failed = 0
+        invalid_fns = 0
         print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
 
@@ -158,6 +159,7 @@ class gitProfileSet:
             authors_seen += 1
 
             for fun in author.functions:
+                test = False
                 fns_seen += 1
                 fn_str = '\n'.join(fun.values())
 
@@ -198,14 +200,29 @@ class gitProfileSet:
                         if node_type not in ast_feature_ext.type_depths:
                             node_type_depths[node_type].append(0.0)
 
-                except:
+                except Exception as e:
+                    msg = str(e)
+                    fname = "test/failed{}.cpp".format(fns_failed)
+
+                    if "Ill-defined function" in msg:
+                        fname = "test/invalid{}.cpp".format(invalid_fns)
+                        invalid_fns += 1
+                    else:
+                        fns_failed += 1
+
+                    with open(fname, "w+") as f:
+                        f.write(fn_str + "\n")
+                        f.write("+++++++++++++++++++++++++++++++\n")
+                        f.write(msg)
+                        # raise(e)
+
                     node_bigrams.append("")
                     node_types.append("")
                     depths = vstack([depths, csr_matrix([0,0], shape=(1, 2))])
                     for node_type in node_type_depths:
                         node_type_depths[node_type].append(0.0)
-                    fns_failed += 1
                     continue
+
 
                 # Token-level features
                 # if tokFeatures is None:
@@ -218,7 +235,9 @@ class gitProfileSet:
         node_types = np.array(node_types)
         node_bigrams = np.array(node_bigrams)
 
-        print("Functions successfully parsed: {:.2f}%".format(100 * (1 - fns_failed / fns_seen)))
+        print("Stats:")
+        print("Invalid functions: {:.2f}%".format(100 * invalid_fns / fns_seen))
+        print("Valid functions successfully parsed: {:.2f}%".format(100 * (1 - fns_failed / (fns_seen - invalid_fns))))
         print("Vectorizing...")
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S+",
                                        decode_error="ignore", lowercase=False)
@@ -226,8 +245,17 @@ class gitProfileSet:
                                         decode_error="ignore", lowercase=False,
                                         use_idf=False)
 
+        self.counts = hstack([depths, tokFeatures], format = 'csr')
+        self.terms = depths_names
+        """
         self.counts = hstack([charLevelFeatures, depths, tokFeatures], format = 'csr')
         self.terms = charfeatureNames + depths_names #+ tokfeatureNames
+
+        # Tokens TFIDF
+        self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
+                             format = 'csr')
+        self.terms += vectorizer.get_feature_names()
+        """
 
         # adding the node_type_depths
         node_type_depth_names = node_type_depths.keys()
@@ -238,11 +266,6 @@ class gitProfileSet:
         self.terms += node_type_depth_names
         del node_type_depth_names
 
-        # Tokens TFIDF
-        self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
-                             format = 'csr')
-        self.terms += vectorizer.get_feature_names()
-
         # AST Node Types TF and TFIDF
         self.counts = hstack([self.counts, vectorizer.fit_transform(node_types),
                               vectorizer_tf.fit_transform(node_types)], format='csr')
@@ -252,10 +275,14 @@ class gitProfileSet:
         vectorizer = TfidfVectorizer(analyzer="word", lowercase=False,
                                      tokenizer=lambda x: x.split(";"))
 
+
         self.counts = hstack([self.counts, vectorizer.fit_transform(node_bigrams)],
                              format='csr')
         self.terms += vectorizer.get_feature_names()
 
+        with open("test/bigrams.txt", "w+") as f:
+            for bigram in vectorizer.get_feature_names():
+                f.write(bigram + "\n")
 
         del inputs, node_types, code_unigrams, node_bigrams
 

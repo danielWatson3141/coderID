@@ -19,7 +19,7 @@ class ASTFeatures:
     """
     def __init__(self, token_text):
         self.ast = AbstractSyntaxTree.ASTree()
-        self.ast.lexer(token_text)
+        self.ast.parse_function(token_text)
 
         self.bigrams_text = ""           # Bigrams. Format: {(parent_type, child_type): frequency}
         self.type_depths = Counter()     # Format: {ASTNodeType: depths}
@@ -87,6 +87,7 @@ class ASTFeatures:
         self.depths = csr_matrix([self.max_node_depth, self.avg_node_depth], shape=(1, 2))
 
 
+"""
 if __name__ == "__main__":
     fns_seen = 3
     ast_feature_ext = {'p': 2, 'e': 3}
@@ -105,5 +106,5 @@ if __name__ == "__main__":
             node_type_depths[node_type].append(0.0)
 
     print(node_type_depths)
-
+"""
 
