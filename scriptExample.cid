@@ -2,4 +2,4 @@ new caffe
 loadGit ../gitSamples/small/caffe
 compile
 pruneGit 1000 50 1000
-multiOutputTest
+multiClassSingleModelTest

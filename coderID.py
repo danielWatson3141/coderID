@@ -40,28 +40,44 @@ class MyPrompt(Cmd):
         #os.environ["DYLD_LIBRARY_PATH"] = "/usr/local/Cellar/llvm/7.0.1/lib/"
         self.featuresDetected = False
             
-        self.gpsList = list()
+        self.gpsList = set()
         self.saveLocation = os.getcwd()+"/savedSets/"
         self.resultLocation = os.getcwd()+"/classResults/"
         self.plotLocation = os.getcwd()+"/plots/"
+        self.repoLocation = os.getcwd()+"/repos/"
 
-        for direc in [self.saveLocation, self.resultLocation, self.plotLocation]:
+        for direc in [self.saveLocation, self.resultLocation, self.plotLocation, self.repoLocation]:
             if not os.path.exists(direc):
                 os.mkdir(direc)
                 print("directory ", direc, " Created.")
 
-        for fileName in os.listdir(self.saveLocation):
-            self.gpsList.append(fileName)
+        self.do_refresh("")
 
-        if len(self.gpsList) is not 0:
-            self.do_load(self.gpsList[0])
-        else:
-            self.activegps = gitProfileSet.gitProfileSet("default")
+        for gps in self.gpsList:
+            self.do_load(gps)
+            return
+            break #just do it once. Hack around getting a single arbitrary element from set
+        
+        self.activegps = gitProfileSet.gitProfileSet("default")
 
         self.prompt = self.activegps.name+">"
-        print("Current set: "+self.activegps.name)
+        #print("Current set: "+self.activegps.name)
         
-        
+    def do_new(self, args):
+        """Re-initializes profile set to be empty"""
+        if args == "":
+            print("No name given, initializing to \"default\"")
+            self.activegps = gitProfileSet.gitProfileSet("default")
+        else:
+            self.activegps = gitProfileSet.gitProfileSet(args)
+            self.gpsList.add(args)
+
+        self.prompt = self.activegps.name+">"
+
+    def do_refresh(self, args):
+        self.gpsList = set()
+        for fileName in os.listdir(self.saveLocation):
+            self.gpsList.add(fileName)
 
     def do_save(self, filepath=''):
         """Saves active gps, overwriting given file. Also used to rename set."""
@@ -81,7 +97,7 @@ class MyPrompt(Cmd):
         self.activegps.name = newName
         self.save(self.activegps)
         if newName not in self.gpsList:
-            self.gpsList.append(newName)
+            self.gpsList.add(newName)
         
         print("Saved to "+newName)
 
@@ -91,19 +107,38 @@ class MyPrompt(Cmd):
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
         pickler.dump(copy.deepcopy(gps))
         
+    
+
+
     def do_load(self, args):
         """Switches currently active gps to one with given name. ***PROLLY SHOULD SAVE FIRST***"""
+        
         if(args == ""):
             print("Error, must supply name of existing gps. Use 'new' to start a fresh one.")
-        self.activegps = self.load(args)
-        self.prompt = self.activegps.name+">"
+            return None
+        
+        gpsName = args.replace("/", "_")
 
-    def load(self, gpsName):
-        for gpsFile in self.gpsList:
-            path, extension = os.path.splitext(gpsFile)
-            fileName = path.split("/")[-1]
-            if gpsName == fileName:
-                return(self.loadGPSFromFile(gpsName))
+        if gpsName in self.gpsList:
+            self.activegps = self.loadGPSFromFile(gpsName)
+        else:
+            self.do_new(gpsName)
+
+            repoName = args.split("/")[1]
+            if not os.path.isdir(self.repoLocation+gpsName+"/"+repoName): #check if repo exists
+                self.clone_repo(args)  #clone if not
+        
+            self.do_loadGit(self.repoLocation+gpsName+"/"+repoName) #load it
+            self.do_save("")
+        
+        self.prompt = self.activegps.name+">"
+        
+                    
+
+
+        
+
+        #not found in existing sets
 
     def loadGPSFromFile(self, fileName):
         file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
@@ -522,7 +557,7 @@ class MyPrompt(Cmd):
         self.activegps.featuresSelected = None
         self.do_save()
 
-    def do_multiOutputTest(self, args):
+    def do_multiClassSingleModelTest(self, args):
         expName = self.activegps.name
        
         if len(args) > 0:
@@ -627,17 +662,6 @@ class MyPrompt(Cmd):
 
         self.activegps.authors = new
         self.activegps.featuresDetected = False
-
-    def do_new(self, args):
-        """Re-initializes profile set to be empty"""
-        if args == "":
-            print("No name given, initializing to \"default\"")
-            self.activegps = gitProfileSet.gitProfileSet("default")
-        else:
-            self.activegps = gitProfileSet.gitProfileSet(args)
-            self.gpsList.append(args)
-
-        self.prompt = self.activegps.name+">"
              
     def do_loadGit(self, args):
         """Loads a single git repo. Can be local or remote."""
@@ -825,6 +849,34 @@ class MyPrompt(Cmd):
                         print("invalid command: "+line)
         else:
             print("please provide a coderID script file.")
+
+    def do_getRepo(self, args):
+        import re
+        if re.fullmatch(r".*/.*", args):
+            self.clone_repo(args)
+        else:
+            print("Incorrect format. Example: BVLC/caffe")
+
+    def clone_repo(self, targetRepo, destination = ""):
+        if destination == "":
+            destination = self.repoLocation + targetRepo.replace("/", "_")
+
+        try:
+            with open(os.getcwd()+"/github.token", 'r') as file:
+                import github
+                g = github.MainClass.Github(file.readline().split("\n")[0], timeout=30)
+            targetRepoURL = g.search_repositories(targetRepo)[0].clone_url
+
+            if not os.path.exists(destination):
+                os.mkdir(destination)
+            import git
+            print("cloning "+targetRepoURL)
+            result = git.Git(destination).clone(targetRepoURL)
+            result
+        except Exception:
+            print("repo not cloned: "+targetRepo)
+            return False
+        return True
 
     
 def memory_limit():
