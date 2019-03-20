@@ -147,3 +147,21 @@ def plot_roc_auc_curves(results, directory="classResults", session_name=""):
     # Save plot
     plot_filepath = "{}/{}_All_ROC.png".format(directory, session_name)
     plt.savefig(plot_filepath)
+
+
+# Plots a histogram of function lengths in terms of lines of code given a list of functions
+# functions is a list of dictionaries mapping tuples of (commitHash, file, lineNumber) to strings
+def plot_function_length_histogram(functions, directory="classResults", session_name=""):
+    function_lengths = [len(function) for function in functions]
+
+    # Plot histogram
+    plt.figure()
+    plt.hist(function_lengths, edgecolor='black')
+    plt.title("Lines of Code of Classified Functions")
+    plt.ylabel("Frequency")
+    plt.xlabel("Lines of Code")
+
+    # Save plot
+    plot_filepath = "{}/{}_function_LOC_hist.png".format(directory, session_name)
+    plt.savefig(plot_filepath)
+

@@ -130,19 +130,12 @@ class gitProfileSet:
             print(value)
 
 
-    def plotFunctionLengths(self):
-        num_functions = 0
-        num_lines_of_code = 0
+    def getAllFunctions(self):
+        functions = []
         for author in self.authors.values():
-            num_functions += len(author.functions)
-            num_lines_of_code += len(author.lines)
+            functions.extend(author.functions)
 
-        avg_lines_of_code = num_lines_of_code / num_functions
-
-        table_template = "{0:35}{1:8}"
-        print(table_template.format("Total number of functions:", num_functions))
-        print(table_template.format("Total lines of code:", num_lines_of_code))
-        print(table_template.format("Avg lines of code per function:", round(avg_lines_of_code, 2)))
+        return functions
 
 
     def getFeatures(self):
