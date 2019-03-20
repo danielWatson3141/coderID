@@ -139,6 +139,14 @@ class gitProfileSet:
             print(value)
 
 
+    def getAllFunctions(self):
+        functions = []
+        for author in self.authors.values():
+            functions.extend(author.functions)
+
+        return functions
+
+
     def getFeatures(self):
         numAuthors = PPTools.Config.get_value('Model', 'number_of_authors')
 
