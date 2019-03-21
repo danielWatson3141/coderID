@@ -75,6 +75,7 @@ class MyPrompt(Cmd):
         self.prompt = self.activegps.name+">"
 
     def do_refresh(self, args):
+        """Looks around for saved sets and repos"""
         self.gpsList = set()
         for fileName in os.listdir(self.saveLocation):
             self.gpsList.add(fileName)
@@ -137,11 +138,6 @@ class MyPrompt(Cmd):
         
         self.prompt = self.activegps.name+">"
         
-                    
-
-
-        
-
         #not found in existing sets
 
     def loadGPSFromFile(self, fileName):
@@ -184,6 +180,7 @@ class MyPrompt(Cmd):
 
 
     def do_getGPSForAuthor(self, args):
+        """Extracts an author's code from the active repo, saving their work in another set"""
         try:
             author = self.activegps.authors[args] 
         except Exception:
@@ -192,6 +189,7 @@ class MyPrompt(Cmd):
         self.save(author.getGPSofSelf())
 
     def do_getGPSForEmail(self, args):
+        """Attempts to find the author's Github page and creates gps for them"""
         dev = object()
         dev.name = args.split("@")[0]
         dev.email = args
@@ -220,6 +218,7 @@ class MyPrompt(Cmd):
         raise SystemExit
 
     def do_multiClassTest(self, args):
+        """Builds a model for each author and classifies by maximum liklihood"""
         expName = self.activegps.name
        
         if len(args) > 0:
@@ -230,10 +229,6 @@ class MyPrompt(Cmd):
             self.activegps.getFeatures()
             self.activegps.featuresSelected = None
             self.do_save()
-
-        # if self.activegps.featuresSelected is None:
-        #     self.activegps.featureSelect()
-        #     self.do_save()
 
         print("Generating Class Report")
         splits = int(PPTools.Config.config["Cross Validation"]["n_splits"])
@@ -280,7 +275,6 @@ class MyPrompt(Cmd):
         print(classification_report(pred, tar, output_dict=False))
         report = classification_report(pred, tar, output_dict=True)
          
-
         with open(self.resultLocation+expName+"_multi_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)
             oneReport = list(report.items())[0]     
@@ -413,7 +407,7 @@ class MyPrompt(Cmd):
 
 
     def do_twoClassTest(self, args):
-        """Builds and evaluates a Random Forest classifier over each author and write results to a file."""
+        """Builds and evaluates a Random Forest classifier over each author in a 1vAll manner and write results to a file."""
 
         expName = self.activegps.name
        
@@ -425,10 +419,6 @@ class MyPrompt(Cmd):
             self.activegps.getFeatures()
             self.activegps.featuresSelected = None
             self.do_save()
-
-        # if self.activegps.featuresSelected is None:
-        #     self.activegps.featureSelect()
-        #     self.do_save()
 
         print("Generating Class Report")
 
@@ -562,6 +552,7 @@ class MyPrompt(Cmd):
         self.do_save()
 
     def do_multiClassSingleModelTest(self, args):
+        """Builds a single multi-class classifier and evaluates over the dataset"""
         expName = self.activegps.name
        
         if len(args) > 0:
@@ -623,6 +614,7 @@ class MyPrompt(Cmd):
 
 
     def do_authorsInCommon(self, args):
+        """display common authors between repos"""
         for file1 in os.listdir(self.saveLocation):
             for file2 in os.listdir(self.saveLocation):
                 if file1 == file2:
@@ -690,7 +682,7 @@ class MyPrompt(Cmd):
         num_functions = len(author_functions)
         num_lines_of_code = 0
         for function in author_functions:
-            num_lines_of_code += len(function)
+            num_lines_of_code += len(function.split("\n"))
 
         avg_lines_of_code = num_lines_of_code / num_functions
 
@@ -816,9 +808,6 @@ class MyPrompt(Cmd):
         """print basic info about this gps"""
         print(self.activegps)
 
-    def do_testCommitClassification(self, args):
-        testCommitClassification.test_heuristic_function()
-
     def do_run(self, args):
         """run a provided bash/coderID script file. Bash lines should start with /"""
         import subprocess
@@ -827,7 +816,7 @@ class MyPrompt(Cmd):
                 for line in f:
                     try:
                         if line[0] == '/':
-                            process = subprocess.Popen(line[1:], stdout=subprocess.PIPE, shell=True)
+                            subprocess.Popen(line[1:], stdout=subprocess.PIPE, shell=True)
                         elif line.isspace():
                             continue
                         else:
@@ -838,6 +827,7 @@ class MyPrompt(Cmd):
             print("please provide a coderID script file.")
 
     def do_getRepo(self, args):
+        """Fetches a specific repo from github. Example: BVLC/caffe"""
         import re
         if re.fullmatch(r".*/.*", args):
             self.clone_repo(args)

@@ -140,6 +140,10 @@ class gitProfileSet:
 
 
     def getFeatures(self):
+
+        if len(self.authors) == 0:
+            self.compileAuthors()
+
         numAuthors = PPTools.Config.get_value('Model', 'number_of_authors')
 
         inputs=[]
@@ -245,9 +249,9 @@ class gitProfileSet:
 
         print("Functions successfully parsed: {:.2f}%".format(100 * (1 - fns_failed / fns_seen)))
         print("Vectorizing...")
-        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S+",
+        vectorizer =  TfidfVectorizer(analyzer="word", token_pattern=r"\S+",
                                        decode_error="ignore", lowercase=False)
-        vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern="\S+",
+        vectorizer_tf = TfidfVectorizer(analyzer="word", token_pattern=r"\S+",
                                         decode_error="ignore", lowercase=False,
                                         use_idf=False)
 

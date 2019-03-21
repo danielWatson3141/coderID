@@ -152,7 +152,7 @@ def plot_roc_auc_curves(results, directory="plots", session_name=""):
 # Plots a histogram of function lengths in terms of lines of code given a list of functions
 # functions is a list of dictionaries mapping tuples of (commitHash, file, lineNumber) to strings
 def plot_function_length_histogram(functions, directory="plots", session_name=""):
-    function_lengths = [len(function) for function in functions]
+    function_lengths = [len(function.split("\n")) for function in functions]
     bin_size = 10
     bins = np.arange(min(function_lengths), max(function_lengths) + bin_size, bin_size)
 
