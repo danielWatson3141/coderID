@@ -781,7 +781,7 @@ class MyPrompt(Cmd):
     
 
     def do_getGitRepos(self,args):
-        """WINDOWS ONLY Read repos from reporeapers .csv file, fetch and store in target directory, using temp if specified. Use temp if trying to download to external drive"""
+        """Read repos from reporeapers .csv file, fetch and store in target directory, using temp if specified. Use temp if trying to download to external drive"""
         if args == "":
             print("Must supply a target filepath.")
             return
@@ -790,33 +790,14 @@ class MyPrompt(Cmd):
         inputFile = args[0]
         import csv
         data = list(csv.reader(open(inputFile)))
-        outputDir = args[1]
-        if len(args)>2:
-            tempdir = args[2]
-        else:
-            tempdir = None
-        for row in data[1:]:
+        if len(args) > 1:
+            nReposToFetch = int(args[1])
+
+        print("Fetching necessary repos...")
+
+        for row in tqdm(data[1:nReposToFetch+1]):
             repo = row[0]
-            
-            import subprocess
-            import shutil 
-            repoDirName = repo.split("/")[1]
-            if tempdir != None:
-                downTarget = tempdir
-            else:
-                downTarget = outputDir
-            if os.path.exists(downTarget+"/"+repoDirName):
-                continue
-            if repoDirName not in os.listdir(outputDir):
-                #TODO: Make linux worthy
-                subprocess.Popen([r'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
-                    '-ExecutionPolicy',
-                    'Unrestricted',
-                    './downloadrepos.ps1',
-                    str(repo), downTarget], cwd=os.getcwd()).wait()  
-                if tempdir != None:
-                    shutil.copytree(tempdir+repoDirName, outputDir+"/"+repoDirName)
-                    shutil.rmtree(tempdir+repoDirName)
+            self.do_getRepo(repo)
 
     @staticmethod
     def bestNFeatures(imp, names, n):
@@ -870,11 +851,11 @@ class MyPrompt(Cmd):
             if not os.path.exists(destination):
                 os.mkdir(destination)
             import git
-            print("cloning "+targetRepoURL)
+            #print("cloning "+targetRepoURL)
             result = git.Git(destination).clone(targetRepoURL)
             result
         except Exception:
-            print("repo not cloned: "+targetRepo)
+            #print("repo not cloned: "+targetRepo)
             return False
         return True
 
