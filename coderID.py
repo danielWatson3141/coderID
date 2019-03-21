@@ -79,6 +79,12 @@ class MyPrompt(Cmd):
         for fileName in os.listdir(self.saveLocation):
             self.gpsList.add(fileName)
 
+        for fileName in os.listdir(self.repoLocation):
+            if fileName not in self.gpsList:
+                self.do_load(fileName)
+                self.do_save("")
+        
+
     def do_save(self, filepath=''):
         """Saves active gps, overwriting given file. Also used to rename set."""
         
@@ -108,8 +114,6 @@ class MyPrompt(Cmd):
         pickler.dump(copy.deepcopy(gps))
         
     
-
-
     def do_load(self, args):
         """Switches currently active gps to one with given name. ***PROLLY SHOULD SAVE FIRST***"""
         
@@ -124,12 +128,12 @@ class MyPrompt(Cmd):
         else:
             self.do_new(gpsName)
 
-            repoName = args.split("/")[1]
+            repoName = args.split("_")[1]
             if not os.path.isdir(self.repoLocation+gpsName+"/"+repoName): #check if repo exists
                 self.clone_repo(args)  #clone if not
         
             self.do_loadGit(self.repoLocation+gpsName+"/"+repoName) #load it
-            self.do_save("")
+            #self.do_save("")
         
         self.prompt = self.activegps.name+">"
         
@@ -783,7 +787,7 @@ class MyPrompt(Cmd):
     def do_getGitRepos(self,args):
         """Read repos from reporeapers .csv file, fetch and store in target directory, using temp if specified. Use temp if trying to download to external drive"""
         if args == "":
-            print("Must supply a target filepath.")
+            print("Must supply a source filepath.")
             return
         args = args.split(" ")
         
@@ -792,6 +796,8 @@ class MyPrompt(Cmd):
         data = list(csv.reader(open(inputFile)))
         if len(args) > 1:
             nReposToFetch = int(args[1])
+        else:
+            nReposToFetch = len(data)
 
         print("Fetching necessary repos...")
 
