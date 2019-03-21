@@ -822,7 +822,6 @@ class MyPrompt(Cmd):
                         else:
                             self.onecmd(line)
                     except Exception as e:
-                        #import pdb; pdb.set_trace()
                         print(e)
                         print("invalid command: " + line)
         else:

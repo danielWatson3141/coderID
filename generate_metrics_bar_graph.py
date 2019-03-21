@@ -16,7 +16,7 @@ def get_report_precision_recall(filename):
 
 # Returns list of all overall precision and recall from sessions listed in the file
 def get_session_metrics(filepath):
-    session_df = pd.read_csv("bar_graph_sessions.csv")
+    session_df = pd.read_csv(filepath)
 
     sessions = list(session_df["session"])
     report_paths = list(session_df["report_filepath"])
