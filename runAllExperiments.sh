@@ -4,7 +4,7 @@ SESSION="experimentSession"
 MIN_COMMITS=50
 
 if [ "$#" -gt 3 ] || [ "$#" -lt 1 ]; then
-    echo "Invalid number of  paramters. Usage: ./$0 repopath [ sessionName ] [ minCommits ]"
+    echo "Invalid number of paramters. Usage: ./$0 repopath [ sessionName ] [ minCommits ]"
     exit 1
 fi
 
