@@ -5,7 +5,7 @@ MIN_FUNCTIONS=50
 
 # Parse command line args
 if [ "$#" -gt 3 ] || [ "$#" -lt 1 ]; then
-    echo "Invalid number of paramters. Usage: ./$0 repopath [ sessionName ] [ minFunctions ]"
+    echo "Invalid number of parameters. Usage: ./$0 repopath [ sessionName ] [ minFunctions ]"
     exit 1
 fi
 
