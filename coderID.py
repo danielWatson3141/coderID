@@ -597,7 +597,7 @@ class MyPrompt(Cmd):
         report = classification_report(pred, tar, output_dict=True)
          
 
-        with open(self.resultLocation+expName+"_multi_report.csv", 'w+') as reportFile:
+        with open(self.resultLocation + expName + "_single_model_multi_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)
             oneReport = list(report.items())[0]     
             oneSample = oneReport[1]
@@ -821,8 +821,9 @@ class MyPrompt(Cmd):
                             continue
                         else:
                             self.onecmd(line)
-                    except:
-                        print("invalid command: "+line)
+                    except Exception as e:
+                        print(e)
+                        print("invalid command: " + line)
         else:
             print("please provide a coderID script file.")
 
