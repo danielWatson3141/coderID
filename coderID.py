@@ -22,7 +22,7 @@ from sklearn.model_selection import cross_val_score,ShuffleSplit, StratifiedKFol
 from sklearn import metrics, utils
 from sklearn.metrics import classification_report
 
-from plotting import plot_roc_auc_curves
+from plotting import plot_roc_auc_curves, plot_function_length_histogram
 
 
 
@@ -40,30 +40,44 @@ class MyPrompt(Cmd):
         #os.environ["DYLD_LIBRARY_PATH"] = "/usr/local/Cellar/llvm/7.0.1/lib/"
         self.featuresDetected = False
             
-        self.gpsList = list()
+        self.gpsList = set()
         self.saveLocation = os.getcwd()+"/savedSets/"
         self.resultLocation = os.getcwd()+"/classResults/"
         self.plotLocation = os.getcwd()+"/plots/"
+        self.repoLocation = os.getcwd()+"/repos/"
 
-        for direc in [self.saveLocation, self.resultLocation, self.plotLocation]:
-            try:
+        for direc in [self.saveLocation, self.resultLocation, self.plotLocation, self.repoLocation]:
+            if not os.path.exists(direc):
                 os.mkdir(direc)
                 print("directory ", direc, " Created.")
-            except FileExistsError:
-                continue
 
-        for fileName in os.listdir(self.saveLocation):
-            self.gpsList.append(fileName)
+        self.do_refresh("")
 
-        if len(self.gpsList) is not 0:
-            self.do_load(self.gpsList[0])
-        else:
-            self.activegps = gitProfileSet.gitProfileSet("default")
+        for gps in self.gpsList:
+            self.do_load(gps)
+            return
+            break #just do it once. Hack around getting a single arbitrary element from set
+        
+        self.activegps = gitProfileSet.gitProfileSet("default")
 
         self.prompt = self.activegps.name+">"
-        print("Current set: "+self.activegps.name)
+        #print("Current set: "+self.activegps.name)
         
-        
+    def do_new(self, args):
+        """Re-initializes profile set to be empty"""
+        if args == "":
+            print("No name given, initializing to \"default\"")
+            self.activegps = gitProfileSet.gitProfileSet("default")
+        else:
+            self.activegps = gitProfileSet.gitProfileSet(args)
+            self.gpsList.add(args)
+
+        self.prompt = self.activegps.name+">"
+
+    def do_refresh(self, args):
+        self.gpsList = set()
+        for fileName in os.listdir(self.saveLocation):
+            self.gpsList.add(fileName)
 
     def do_save(self, filepath=''):
         """Saves active gps, overwriting given file. Also used to rename set."""
@@ -83,7 +97,7 @@ class MyPrompt(Cmd):
         self.activegps.name = newName
         self.save(self.activegps)
         if newName not in self.gpsList:
-            self.gpsList.append(newName)
+            self.gpsList.add(newName)
         
         print("Saved to "+newName)
 
@@ -93,19 +107,38 @@ class MyPrompt(Cmd):
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
         pickler.dump(copy.deepcopy(gps))
         
+    
+
+
     def do_load(self, args):
         """Switches currently active gps to one with given name. ***PROLLY SHOULD SAVE FIRST***"""
+        
         if(args == ""):
             print("Error, must supply name of existing gps. Use 'new' to start a fresh one.")
-        self.activegps = self.load(args)
-        self.prompt = self.activegps.name+">"
+            return None
+        
+        gpsName = args.replace("/", "_")
 
-    def load(self, gpsName):
-        for gpsFile in self.gpsList:
-            path, extension = os.path.splitext(gpsFile)
-            fileName = path.split("/")[-1]
-            if gpsName == fileName:
-                return(self.loadGPSFromFile(gpsName))
+        if gpsName in self.gpsList:
+            self.activegps = self.loadGPSFromFile(gpsName)
+        else:
+            self.do_new(gpsName)
+
+            repoName = args.split("/")[1]
+            if not os.path.isdir(self.repoLocation+gpsName+"/"+repoName): #check if repo exists
+                self.clone_repo(args)  #clone if not
+        
+            self.do_loadGit(self.repoLocation+gpsName+"/"+repoName) #load it
+            self.do_save("")
+        
+        self.prompt = self.activegps.name+">"
+        
+                    
+
+
+        
+
+        #not found in existing sets
 
     def loadGPSFromFile(self, fileName):
         file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
@@ -218,11 +251,13 @@ class MyPrompt(Cmd):
 
             conf = dict()
             for author in tqdm(self.activegps.authors.keys()):
-                clf = self.train_binary(trFeatures, trTarget, author)
+                clf = Classifier.Classifier().model
+                auth_trFeatures = self.reFeSe(clf, trFeatures, trTarget)    #feature select for the athor
+                clf = self.train_binary(trFeatures[:,auth_trFeatures], trTarget, author)
                 if clf.classes_[0] == author:   #Make sure the author in question is treated as the pos label...
-                    conf[author] = [prob[0] for prob in clf.predict_proba(teFeatures)]
+                    conf[author] = [prob[0] for prob in clf.predict_proba(teFeatures[:,auth_trFeatures])]
                 else:
-                    conf[author] = [prob[1] for prob in clf.predict_proba(teFeatures)]
+                    conf[author] = [prob[1] for prob in clf.predict_proba(teFeatures[:,auth_trFeatures])]
 
             for i in range(0, len(teTarget)):
                 max_prob = 0
@@ -257,7 +292,6 @@ class MyPrompt(Cmd):
                 w.writerow(row)
 
         
-     
     def binaryify(self, outputs, author):
         targets = []
         authorInd = []
@@ -305,8 +339,6 @@ class MyPrompt(Cmd):
         previousBest = range(0, features.shape[1])
         best = None
         nFeatures = features.shape[1]
-
-        retFeatures = features
 
         #reduce sample size to decrease training time
         maxSamples = int(PPTools.Config.config["Feature Selection"]["max_samples"])
@@ -397,7 +429,7 @@ class MyPrompt(Cmd):
         print("Generating Class Report")
 
         results = dict()
-        for authorName in tqdm(self.activegps.authors):
+        for authorName in tqdm(self.activegps.authors.keys()):
             results.update(
                 {authorName:
                     self.twoClassTest(authorName, dictOutput=True)
@@ -408,7 +440,6 @@ class MyPrompt(Cmd):
 
         # Create csv target directory if non-existent
         
-
         # imp = None
         # for authorName, result in results.items():
         #     importances = result["importances"]
@@ -512,6 +543,8 @@ class MyPrompt(Cmd):
         report["importances"] = imp
         report["fpr"] = fpr
         report["tpr"] = tpr
+        report["targets"] = list(map(lambda label: 1 if label == author else 0, tar))
+        report["predictions"] = conf
 
         return report
 
@@ -524,10 +557,66 @@ class MyPrompt(Cmd):
         self.activegps.featuresSelected = None
         self.do_save()
 
-    # def do_featureSelect(self, args):
-    #     """Perform feature selection operation. This is called automatically from classifyFunctions if not run already"""   
-    #     self.activegps.featureSelect()
-    #     self.do_save()
+    def do_multiClassSingleModelTest(self, args):
+        expName = self.activegps.name
+       
+        if len(args) > 0:
+            expName = args[0]
+
+        if not self.activegps.featuresDetected:
+            print("Running Feature Detection")
+            self.activegps.getFeatures()
+            self.activegps.featuresSelected = None
+            self.do_save()
+
+        print("Generating Class Report")
+        splits = int(PPTools.Config.config["Cross Validation"]["n_splits"])
+        cv = StratifiedKFold(n_splits=splits, shuffle=True)
+        pred = []
+        tar = []
+        imp = []  #cumulative feature importances
+        #print("Cross Validating")
+        features = self.activegps.counts
+        targets = self.activegps.target
+        for train, test in tqdm(list(cv.split(features, targets))):
+
+            trFeatures = features[train]
+            trTarget = targets[train]   #grab the training set...
+
+            teFeatures = features[test]
+            teTarget = targets[test]    #...and the test set.
+
+            #train multi-output classifier
+            clf = Classifier.Classifier().model
+            
+            selectedFeatures = self.reFeSe(clf, trFeatures, trTarget)
+            trFeatures = trFeatures[:,selectedFeatures]    #feature select for the athor
+            
+            clf.fit(trFeatures, trTarget)
+
+            pred.extend(clf.predict(teFeatures[:,selectedFeatures]))
+            tar.extend(teTarget)
+
+        
+        print(classification_report(pred, tar, output_dict=False))
+        report = classification_report(pred, tar, output_dict=True)
+         
+
+        with open(self.resultLocation+expName+"_multi_report.csv", 'w+') as reportFile:
+            w = csv.writer(reportFile)
+            oneReport = list(report.items())[0]     
+            oneSample = oneReport[1]
+            header = ["Author"]
+            header.extend(oneSample.keys())
+            #print(header)
+            w.writerow(header)
+            #make classification report
+            for authorName, result in report.items():
+                row = [authorName]+[value for key, value in result.items()]
+                print(row)
+                w.writerow(row)
+
+
 
     def do_authorsInCommon(self, args):
         for file1 in os.listdir(self.saveLocation):
@@ -573,17 +662,6 @@ class MyPrompt(Cmd):
 
         self.activegps.authors = new
         self.activegps.featuresDetected = False
-
-    def do_new(self, args):
-        """Re-initializes profile set to be empty"""
-        if args == "":
-            print("No name given, initializing to \"default\"")
-            self.activegps = gitProfileSet.gitProfileSet("default")
-        else:
-            self.activegps = gitProfileSet.gitProfileSet(args)
-            self.gpsList.append(args)
-
-        self.prompt = self.activegps.name+">"
              
     def do_loadGit(self, args):
         """Loads a single git repo. Can be local or remote."""
@@ -597,6 +675,34 @@ class MyPrompt(Cmd):
         """Displays all authors found in the currently loaded git repos"""
         self.activegps.displayAuthors()
         #print(self.activegps)
+
+    def do_displayAndPlotFunctionLengths(self, args):
+        """
+        Displays total number of functions, LOC, and average function LOC.
+        Also plots a histogram of function length by LOC
+        """
+        # Calculate metrics on functions
+        author_functions = self.activegps.getAllFunctions()
+        num_functions = len(author_functions)
+        num_lines_of_code = 0
+        for function in author_functions:
+            num_lines_of_code += len(function)
+
+        avg_lines_of_code = num_lines_of_code / num_functions
+
+        # Print function metrics
+        table_template = "{0:35}{1:8}"
+        print(table_template.format("Total number of functions:", num_functions))
+        print(table_template.format("Total lines of code:", num_lines_of_code))
+        print(table_template.format("Avg lines of code per function:", round(avg_lines_of_code, 2)))
+
+        # Plot function length histogram
+        expName = self.activegps.name
+        if len(args) > 0:
+            expName = args[0]
+
+        plot_function_length_histogram(author_functions, self.plotLocation, expName)
+
 
     def do_loadGitRepos(self, args):
         """Loads a directory args[0] of git repos, as many as args[1] def:inf"""
@@ -653,10 +759,7 @@ class MyPrompt(Cmd):
                 total = 0
 
                 for fun in author.functions:
-                    ((hsh, fil, line),code) = next(iter(fun.items())) #Python is whack man.
-                    print(fil+":")
-                    for line in fun.values():
-                        print(line)
+                        print(fun)
                 print()
                 return
                 
@@ -729,6 +832,52 @@ class MyPrompt(Cmd):
     def do_testCommitClassification(self, args):
         testCommitClassification.test_heuristic_function()
 
+    def do_run(self, args):
+        """run a provided bash/coderID script file. Bash lines should start with /"""
+        import subprocess
+        if os.path.isfile(args):
+            with open(args, 'r') as f:
+                for line in f:
+                    try:
+                        if line[0] == '/':
+                            process = subprocess.Popen(line[1:], stdout=subprocess.PIPE, shell=True)
+                        elif line.isspace():
+                            continue
+                        else:
+                            self.onecmd(line)
+                    except:
+                        print("invalid command: "+line)
+        else:
+            print("please provide a coderID script file.")
+
+    def do_getRepo(self, args):
+        import re
+        if re.fullmatch(r".*/.*", args):
+            self.clone_repo(args)
+        else:
+            print("Incorrect format. Example: BVLC/caffe")
+
+    def clone_repo(self, targetRepo, destination = ""):
+        if destination == "":
+            destination = self.repoLocation + targetRepo.replace("/", "_")
+
+        try:
+            with open(os.getcwd()+"/github.token", 'r') as file:
+                import github
+                g = github.MainClass.Github(file.readline().split("\n")[0], timeout=30)
+            targetRepoURL = g.search_repositories(targetRepo)[0].clone_url
+
+            if not os.path.exists(destination):
+                os.mkdir(destination)
+            import git
+            print("cloning "+targetRepoURL)
+            result = git.Git(destination).clone(targetRepoURL)
+            result
+        except Exception:
+            print("repo not cloned: "+targetRepo)
+            return False
+        return True
+
     
 def memory_limit():
     import resource
@@ -751,7 +900,13 @@ if __name__ == '__main__':
         prompt = MyPrompt()
         prompt.prompt = 'coderID> '
         prompt.do_init()
+        if len(sys.argv) > 1 and os.path.isfile(sys.argv[1]):
+            print("Running Script File...")
+            prompt.do_run(sys.argv[1])
+
         prompt.cmdloop('Starting prompt...')
+        
+
     except MemoryError:
         sys.stderr.write('\n\nERROR: Memory Exception\n')
         sys.exit(1)

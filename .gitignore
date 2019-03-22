@@ -4,9 +4,10 @@
 /gitsamples/
 /gcj1/
 *.pyc
-*.cid
 *.csv*
 /savedSets/
 /classResults/
+/plots/
+/repos/
 *.token
 ghmining*.json

@@ -58,22 +58,13 @@ class gitProfileSet:
             repository = pydriller.GitRepository(repo)
             print("Scanning repo: "+miner._path_to_repo)
             
-            tipeCounts = dict()
 
             for commit in tqdm(miner.traverse_commits()):
                 author = commit.author
                 
                 if authors is not None and author not in authors:
                     continue
-                #tipe = commitType.categorize(commit, langList=gitProfileSet.langList)
-
-                #if tipe not in tipeCounts:
-                #    tipeCounts.update({tipe: 0})
-                #count = tipeCounts.get(tipe)
-                #tipeCounts.update({tipe: count+1})
-
-
-                #if tipe is commitType.FEATURE:
+                
                 if True:    #for now, not worried about commit type
                     if author.name not in self.authors:
                         self.authors.update({author.name:gitAuthor(author)})
@@ -94,40 +85,58 @@ class gitProfileSet:
                         author.files.add(mod.new_path)
                         #parse diff and add lines to list
                         
+                        newSC = list()
                         leDiff = repository.parse_diff(mod.diff)
                         for num, line in leDiff["added"]:
-                            author.lines.update({(commit.hash,mod.new_path,num):line})
+                            newSC.append(line)
 
-                        #extract functions with lizard
-                        funs = mod._function_list
+                        from lizard import analyze_file as liz
+                        fileInfo = liz.analyze_source_code(mod.new_path, "\n".join(newSC))
 
                         #maintain list of dicts containing the source code of specific functions. Same format as for lines
                         lineIndex = 0
-                        for fun in funs:
+                        
+                        for fun in fileInfo.function_list:
+                            #Make sure these appear in the "function"
+                            arg_list_termination = r"\)\s*{"
+                            started = False
                             newFun = dict()
+                            lineStr = ""
                             try:
                                 while(leDiff["added"][lineIndex][0]<fun.start_line):
                                     lineIndex+=1
                             
                                 while(leDiff["added"][lineIndex][0]<fun.end_line+1):
-                                    newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):leDiff["added"][lineIndex][1]})
+                                    last_lineStr = lineStr
+                                    lineStr = leDiff["added"][lineIndex][1]
+                                    
+                                    if not started and re.search(arg_list_termination, "".join([lineStr,last_lineStr])):
+                                        started = True
+                                        
+                                    newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):lineStr})
                                     lineIndex+=1
                             except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
                                 pass
-                            if len(newFun) > 1:
-                                author.functions.append(newFun)    
 
-                    
-                    
+                            if started and len(newFun) > 1 and '}' in lineStr + last_lineStr:
+                                author.lines.update(newFun)
+                                author.functions.append(self.functionToString(newFun)) 
+                                
+   
             print(str("finished"+str(miner._path_to_repo)))
             print(self)
-            #print(authorsWithEnoughDocs+" authors with enough code so far.")
-
-
 
     def displayAuthors(self):
         for value in self.authors.values():
             print(value)
+
+
+    def getAllFunctions(self):
+        functions = []
+        for author in self.authors.values():
+            functions.extend(author.functions)
+
+        return functions
 
 
     def getFeatures(self):
@@ -160,7 +169,7 @@ class gitProfileSet:
             for fun in author.functions:
                 fns_seen += 1
 
-                fn_str = '\n'.join(fun.values())
+                fn_str = fun #due to refactor
 
                 #whitespace fn's still getting in. This will catch for that.
                 if fn_str.isspace() or fn_str == '':
@@ -296,85 +305,9 @@ class gitProfileSet:
         self.featuresDetected = True
             #should fit feature detector here
             #then pass it down
-
-    def featureSelect(self):
-        section = 'Feature Selection'
-        reductionFactor = PPTools.Config.get_value(section, 'reduction_factor')
-        # First round feature selection using mutual information
-
-        if self.featuresSelected is not None:
-            print("Features selected already, skipping.")
-        else:
-            print("Selecting features...")
-
-        total_num_features = self.counts.shape[1]
-        print("Number of features before selection: {}".format(total_num_features))
-
-        from sklearn.ensemble import RandomForestClassifier
-        from sklearn import feature_selection
-        import heapq
-        
-        #featureSets = dict() #keep track of sets and feature importances
-        #format: key=n_features value = (strength, features, importances)
-
-        # clf = RandomForestClassifier(n_estimators=300, oob_score=True, max_features="sqrt")
-        clf = RandomForestClassifier(n_estimators=PPTools.Config.get_value(section, 'n_estimators'),
-                                     oob_score=PPTools.Config.get_value(section, 'oob_score'),
-                                     max_features=PPTools.Config.get_value(section, 'max_features'))
-
-        #train with all features to start
-
-        previous = 0
-        strength = .01
-
-        nFeatures = total_num_features
-        features = self.counts
-        terms = self.terms
-        
-        previousFeatures = None
-        previousTerms = None
-
-        #choose optimal feature set size
-        while True:
-            previous = strength
-            
-            strength, importances = self.evaluate(clf, features, self.target)
-            print((nFeatures, strength))
-            if strength < previous:
-                break
-            from operator import itemgetter
-            match = zip(range(0, nFeatures), importances)            
-            
-            nFeatures = int((1-reductionFactor)*nFeatures)
-            
-            previousFeatures = features
-            previousTerms = terms
-
-            best = list(map(lambda x: x[0], heapq.nlargest(nFeatures, match, key = itemgetter(1))))
-
-            features = features[:,best]
-            terms = [terms[i] for i in best]
-
-        self.featuresSelected = previousFeatures
-        self.termsSelected = previousTerms               
-        
-        print("Features selected...")
-
-        n_relevant_features = len(self.termsSelected)
-
-        print("Number of features after selection: {}".format(n_relevant_features))
-        frac_selected = 100 * n_relevant_features / total_num_features
-        print("Percentage of features selected: {:.2f}%".format(frac_selected))
-
     
     def functionToString(self, lines):
-        textLines = list(len(lines))
-
-        for lineInfo, line in lines:
-            cHash, fil, lnum = lineInfo
-            textLines[lnum] = line
-
-        return "\n".join(textLines)
+        return "\n".join(lines.values())
 
     
     def __str__(self):
@@ -389,7 +322,7 @@ class gitAuthor:
             self.email = dev.email
         self.commits = set() #store with repo+commitHash
         self.files = set()
-        self.functions = list() #list of dicts. Each dict represents a function. str same as self.lines 
+        self.functions = list() #list of str
         self.lines = dict() #key: {commitHash,file.cpp,lineNumber} value: literal code
         self.repos = set()
     
