@@ -128,8 +128,13 @@ class MyPrompt(Cmd):
             self.activegps = self.loadGPSFromFile(gpsName)
         else:
             self.do_new(gpsName)
-
-            repoName = args.split("_")[1]
+            if "/" in args:
+                repoName = args.split("/")[1]
+            elif "_" in args:
+                repoName = args.split("_")[1]
+            else:
+                print("repo name not well formed.")
+                return
             if not os.path.isdir(self.repoLocation+gpsName+"/"+repoName): #check if repo exists
                 self.clone_repo(args)  #clone if not
         

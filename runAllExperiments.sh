@@ -1,6 +1,6 @@
 #!/bin/bash
 REPO="$1"
-SESSION="experimentSession"
+SESSION="$REPO"
 MIN_FUNCTIONS=50
 
 # Parse command line args
@@ -21,7 +21,7 @@ FILE="allExperiments.cid"
 
 cat > $FILE <<- EOM
 new ${SESSION}
-loadGit ${REPO}
+load ${REPO}
 compile
 pruneGit 1000 ${MIN_FUNCTIONS} 1000
 multiClassSingleModelTest
