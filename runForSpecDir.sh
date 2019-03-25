@@ -2,6 +2,9 @@
 #SBATCH --time=00:02:00
 #SBATCH --account=def-m2nagapp
 
+module load python/3.6.3
+module load clang/3.8.1
+
 numToRun=$SLURM_ARRAY_TASK_ID #this is slurm task id
 
 SourceDir="$1" #this is source directory with a bunch of repos in it

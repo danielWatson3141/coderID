@@ -21,6 +21,8 @@ from scipy.sparse import hstack, vstack, csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_selection import mutual_info_classif, SelectKBest
 
+from ctypes.util import find_library
+Config.set_library_file(find_library('clang'))
 
 class gitProfileSet:
 
