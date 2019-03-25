@@ -1,6 +1,6 @@
 #!/bin/bash
 REPO="$1"
-SESSION="$REPO"
+SESSION="$2"
 MIN_FUNCTIONS=50
 
 # Parse command line args
@@ -21,7 +21,7 @@ FILE="allExperiments.cid"
 
 cat > $FILE <<- EOM
 new ${SESSION}
-load ${REPO}
+loadGit ${REPO}
 compile
 pruneGit 1000 ${MIN_FUNCTIONS} 1000
 multiClassSingleModelTest
@@ -32,4 +32,4 @@ EOM
 
 # Run experiments
 echo "Running session ${SESSION}"
-python3 coderID.py allExperiments.cid
+python coderID.py allExperiments.cid
