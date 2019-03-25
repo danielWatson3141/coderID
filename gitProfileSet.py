@@ -183,17 +183,18 @@ class gitProfileSet:
                 self.target.append(author.name)
                 # Function-string level features
                 # processing 11 less functions now
+                
+                tu = PPTools.Tokenize.get_tu(fn_str)
+                tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
+                # inputs.append(PPTools.Tokenize.tokensToText(tokens))
+
+                import copy
+                # getting the token pointer-related errors; comment out for now
+                token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True) # can't use this for inputs, but need to ignore comments for AST features
+                inputs.append(token_text)  # Convert to text
+
+                token_text = token_text.split(" ")
                 try:
-                    tu = PPTools.Tokenize.get_tu(fn_str)
-                    tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
-                    # inputs.append(PPTools.Tokenize.tokensToText(tokens))
-
-                    import copy
-                    # getting the token pointer-related errors; comment out for now
-                    token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True) # can't use this for inputs, but need to ignore comments for AST features
-                    inputs.append(token_text)  # Convert to text
-
-                    token_text = token_text.split(" ")
                     ast_feature_ext = ASTFeatureExtractor.ASTFeatures(token_text)
                     ast_feature_ext.traverse()
 
@@ -212,7 +213,6 @@ class gitProfileSet:
                     for node_type in node_type_depths:
                         if node_type not in ast_feature_ext.type_depths:
                             node_type_depths[node_type].append(0.0)
-
                 except:
                     node_bigrams.append("")
                     node_types.append("")
@@ -222,19 +222,12 @@ class gitProfileSet:
                     fns_failed += 1
                     #continue
 
-
-                """
-                Bigram matrix:
-                Create a dok matrix (Dictionary Of Keys based sparse matrix) here
-                """
                 # Function-string level features
                 if charLevelFeatures is None:
                     charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
                 else:
                     charLevelFeatures = vstack([charLevelFeatures,
                                                 featureExtractors.featureExtractors.characterLevel(fn_str)])
-
-
 
                 if tokFeatures is None:
                     tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
