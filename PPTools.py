@@ -5,7 +5,6 @@ import configparser
 from clang import cindex
 
 from ctypes.util import find_library
-cindex.Config.set_library_path(find_library('clang'))
 
 def is_number(s):
     try:
@@ -105,8 +104,8 @@ class PreProcessor:
 class Tokenize:
 
     #TODO: Make linux-worthy
-    if platform.system() == 'Darwin' and not cindex.Config.loaded:
-       cindex.Config.set_library_file(Config.config['Clang']['library_file'])
+    # if platform.system() == 'Darwin' and not cindex.Config.loaded:
+    #    cindex.Config.set_library_file(Config.config['Clang']['library_file'])
 
 
     @staticmethod
@@ -188,6 +187,8 @@ class Tokenize:
 
     @staticmethod
     def get_tu(fn_str):
+        cindex.Config.set_library_path(find_library('clang'))
+
         idx = cindex.Index.create()
         filename = 'tmp.c'
         return idx.parse(filename, unsaved_files=[(filename, fn_str)],
