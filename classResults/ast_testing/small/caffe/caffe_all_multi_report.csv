@@ -1,0 +1,47 @@
+Author,precision,recall,f1-score,support
+Alireza Shafaei,0.00%,0.00%,0.00%,0
+Aravindh Mahendran,-20.00%,-6.67%,-12.73%,-1
+Bo Wang,0.00%,0.00%,0.00%,-1
+Carl Doersch,9.09%,25.00%,13.33%,2
+Cyprien Noel,0.00%,12.31%,2.86%,-2
+Daniel Golden,0.00%,0.00%,0.00%,0
+Dmytro Mishkin,-11.11%,-7.14%,-13.82%,-3
+Eren Golge,0.00%,0.00%,0.00%,0
+Eric Tzeng,-13.33%,-7.03%,-10.23%,-3
+Evan Shelhamer,-3.23%,2.26%,-1.69%,-2
+Felix Abecassis,11.11%,0.00%,13.64%,1
+Harm Berntsen,0.00%,0.00%,0.00%,0
+J Yegerlehner,11.11%,0.00%,12.59%,2
+Jeff Donahue,1.42%,-3.76%,-2.11%,33
+Jonathan L Long,-2.56%,-11.67%,-4.51%,1
+Kai Li,8.96%,-9.00%,3.40%,14
+Kevin James Matzen,-4.21%,4.39%,0.24%,-9
+Luke Yeager,0.00%,0.00%,0.00%,0
+Mikhail Antonenka,0.00%,0.00%,0.00%,0
+Mohamed Omran,0.00%,0.00%,0.00%,0
+Nick Carlevaris-Bianco,0.00%,0.00%,0.00%,2
+Noiredd,0.00%,0.00%,0.00%,-1
+PETER_GAO,8.33%,-16.67%,5.56%,2
+Rob Hess,0.00%,0.00%,0.00%,-1
+Ronghang Hu,-10.77%,0.76%,-5.74%,-9
+Ross Girshick,6.25%,25.00%,12.29%,-3
+Sean Bell,-14.29%,-50.00%,-22.22%,0
+Sergey Karayev,0.00%,5.49%,1.94%,-2
+Sergio,3.45%,8.81%,5.39%,-1
+Sergio Guadarrama,0.00%,0.00%,0.00%,0
+Simon Layton,16.67%,0.00%,10.91%,1
+Simon Safar,0.00%,-15.00%,-2.86%,1
+TANGUY Arnaud,0.00%,0.00%,0.00%,0
+Takuya Narihira,-25.00%,-50.00%,-33.33%,0
+Tim Meinhardt,0.00%,0.00%,0.00%,0
+Yangqing Jia,-1.05%,1.96%,1.12%,-16
+Youssef Kashef,0.00%,0.00%,0.00%,0
+bhack,0.00%,14.29%,3.92%,-1
+linmin,0.00%,-7.58%,-2.85%,1
+manuele,0.00%,0.00%,0.00%,0
+max argus,-10.00%,-16.67%,-12.50%,0
+qipeng,-23.33%,-12.50%,-18.09%,-6
+sguada,14.29%,14.44%,14.86%,1
+micro avg,-1.11%,-1.11%,-1.11%,0
+macro avg,-1.12%,-2.30%,-0.95%,0
+weighted avg,-1.19%,-1.11%,-1.25%,0

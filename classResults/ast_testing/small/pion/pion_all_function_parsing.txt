@@ -1,0 +1,4 @@
+Functions seen: 460
+Stats:
+Invalid functions: 14.78%
+Valid functions that were successfully parsed: 96.94%
