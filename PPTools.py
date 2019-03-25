@@ -4,6 +4,9 @@ import platform
 import configparser
 from clang import cindex
 
+from ctypes.util import find_library
+cindex.Config.set_library_path(find_library('clang'))
+
 def is_number(s):
     try:
         float(s)
