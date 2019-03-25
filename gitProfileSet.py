@@ -141,6 +141,10 @@ class gitProfileSet:
 
     def getFeatures(self):
         numAuthors = PPTools.Config.get_value('Model', 'number_of_authors')
+        # Flags from the config indicating whether to include each feature type or not
+        ast_flag = PPTools.Config.get_value('Feature Levels', 'ast_level')
+        tok_flag = PPTools.Config.get_value('Feature Levels', 'token_level')
+        char_flag = PPTools.Config.get_value('Feature Levels', 'char_level')
 
         inputs=[]
         node_types = []
@@ -150,14 +154,19 @@ class gitProfileSet:
         node_type_depths = Counter()
         code_unigrams = []
 
+        self.counts = None
+        self.terms = []
         self.target = []
+
         charfeatureNames = featureExtractors.featureExtractors.charfeatureNames
         charLevelFeatures = None
         tokfeatureNames = featureExtractors.featureExtractors.tokfeatureNames
         tokFeatures = None
+
         fns_seen = 0
         fns_failed = 0
         invalid_fns = 0
+        no_tokens_fns = 0
         print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
 
@@ -167,54 +176,78 @@ class gitProfileSet:
             authors_seen += 1
 
             for fun in author.functions:
-                fns_seen += 1
-
                 fn_str = fun #due to refactor
 
                 #whitespace fn's still getting in. This will catch for that.
                 if fn_str.isspace() or fn_str == '':
                     continue
 
-                # having these below meant that they didn't run if a function wasn't parse correctly
+                fns_seen += 1
                 self.target.append(author.name)
+
                 # Function-string level features
-                # processing 11 less functions now
+                if char_flag:
+                    if charLevelFeatures is None:
+                        charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
+                    else:
+                        charLevelFeatures = vstack([charLevelFeatures,
+                                                    featureExtractors.featureExtractors.characterLevel(fn_str)])
+
                 try:
                     tu = PPTools.Tokenize.get_tu(fn_str)
-                    tokens = list(tu.get_tokens(extent=tu.cursor.extent)) #Sometimes this  breaks for n.a.r.
-                    # inputs.append(PPTools.Tokenize.tokensToText(tokens))
+                    tokens = list(tu.get_tokens(extent=tu.cursor.extent))  # Sometimes this  breaks for n.a.r.
 
-                    import copy
-                    # getting the token pointer-related errors; comment out for now
-                    token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True) # can't use this for inputs, but need to ignore comments for AST features
-                    inputs.append(token_text)  # Convert to text
+                    if tok_flag:
+                        if tokFeatures is None:
+                            tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
+                        else:
+                            tokFeatures = vstack([tokFeatures,
+                                                  featureExtractors.featureExtractors.tokenLevel(tokens)])
+                        inputs.append(PPTools.Tokenize.tokensToText(tokens))  # Convert to text
+                except Exception as e:
+                    """
+                    msg = str(e)
+                    fname = "test/{}/no_tokens{}.cpp".format(self.name, no_tokens_fns)
+                    no_tokens_fns += 1
+                    with open(fname, "w+") as f:
+                        f.write(fn_str + "\n")
+                        f.write("+++++++++++++++++++++++++++++++\n")
+                        f.write(msg)
+                    """
+                    continue
 
-                    token_text = token_text.split(" ")
-                    ast_feature_ext = ASTFeatureExtractor.ASTFeatures(token_text)
-                    ast_feature_ext.traverse()
+                try:
+                    # Function tokens level features
+                    if ast_flag:
+                        tokens = list(tu.get_tokens(extent=tu.cursor.extent))
+                        token_text = PPTools.Tokenize.tokensToText(tokens, ignore_comments=True)  # can't use this for inputs, but need to ignore comments for AST features
+                        token_text = token_text.split(" ")
+                        ast_feature_ext = ASTFeatureExtractor.ASTFeatures(token_text)
+                        ast_feature_ext.traverse()
 
-                    # Integrating the AST features
-                    node_types.append(ast_feature_ext.node_types)
-                    node_bigrams.append(ast_feature_ext.bigrams_text)
-                    depths = vstack([depths, ast_feature_ext.depths])
+                        # Integrating the AST features
+                        node_types.append(ast_feature_ext.node_types)
+                        node_bigrams.append(ast_feature_ext.bigrams_text)
+                        depths = vstack([depths, ast_feature_ext.depths])
 
-                    # Adding in all the node type depths from current function
-                    for node_type in ast_feature_ext.type_depths:
-                        if node_type not in node_type_depths:
-                            node_type_depths[node_type] = [0.0] * (fns_seen - 1)
-                        node_type_depths[node_type].append(ast_feature_ext.type_depths[node_type])
+                        # Adding in all the node type depths from current function
+                        for node_type in ast_feature_ext.type_depths:
+                            if node_type not in node_type_depths:
+                                node_type_depths[node_type] = [0.0] * (fns_seen - 1)
+                            node_type_depths[node_type].append(ast_feature_ext.type_depths[node_type])
 
-                    # Updating the node types that were not seen in this function but were seen before
-                    for node_type in node_type_depths:
-                        if node_type not in ast_feature_ext.type_depths:
-                            node_type_depths[node_type].append(0.0)
+                        # Updating the node types that were not seen in this function but were seen before
+                        for node_type in node_type_depths:
+                            if node_type not in ast_feature_ext.type_depths:
+                                node_type_depths[node_type].append(0.0)
 
                 except Exception as e:
+                    """
                     msg = str(e)
-                    fname = "test/failed{}.cpp".format(fns_failed)
+                    fname = "test/{}/failed{}.cpp".format(self.name, fns_failed)
 
                     if "Ill-defined function" in msg:
-                        fname = "test/invalid{}.cpp".format(invalid_fns)
+                        fname = "test/{}/invalid{}.cpp".format(self.name, invalid_fns)
                         invalid_fns += 1
                     else:
                         fns_failed += 1
@@ -224,6 +257,7 @@ class gitProfileSet:
                         f.write("+++++++++++++++++++++++++++++++\n")
                         f.write(msg)
                         # raise(e)
+                    """
 
                     node_bigrams.append("")
                     node_types.append("")
@@ -231,28 +265,25 @@ class gitProfileSet:
                     for node_type in node_type_depths:
                         node_type_depths[node_type].append(0.0)
 
-                # Function-string level features
-                if charLevelFeatures is None:
-                    charLevelFeatures = featureExtractors.featureExtractors.characterLevel(fn_str)
-                else:
-                    charLevelFeatures = vstack([charLevelFeatures,
-                                                featureExtractors.featureExtractors.characterLevel(fn_str)])
 
-
-
-                if tokFeatures is None:
-                    tokFeatures = featureExtractors.featureExtractors.tokenLevel(tokens)
-                else:
-                    tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
-                del tokens, token_text
+                del tokens
             
         inputs = np.array(inputs)
         node_types = np.array(node_types)
         node_bigrams = np.array(node_bigrams)
 
-        print("Stats:")
-        print("Invalid functions: {:.2f}%".format(100 * invalid_fns / fns_seen))
-        print("Valid functions successfully parsed: {:.2f}%".format(100 * (1 - fns_failed / (fns_seen - invalid_fns))))
+        """
+        if ast_flag:
+            msg = "Functions seen: {}\n".format(fns_seen)
+            msg += "Stats:\n" + "Invalid functions: {:.2f}%\n".format(100 * invalid_fns / fns_seen)
+            msg += "Valid functions that were successfully parsed: {:.2f}%".format(100 * (1 - fns_failed / (fns_seen - invalid_fns)))
+
+            resultLocation = os.getcwd() + "/classResults/"
+            with open(resultLocation + self.name + "_function_parsing.txt", 'w+') as f:
+                print(msg)
+                f.write(msg)
+        """
+
         print("Vectorizing...")
         vectorizer =  TfidfVectorizer(analyzer="word", token_pattern="\S+",
                                        decode_error="ignore", lowercase=False)
@@ -260,49 +291,59 @@ class gitProfileSet:
                                         decode_error="ignore", lowercase=False,
                                         use_idf=False)
 
-        self.counts = hstack([depths, tokFeatures], format = 'csr')
-        self.terms = depths_names
-        """
-        self.counts = hstack([charLevelFeatures, depths, tokFeatures], format = 'csr')
-        self.terms = charfeatureNames + depths_names + tokfeatureNames
-
-        # Tokens TFIDF
-        self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
-                             format = 'csr')
-        self.terms += vectorizer.get_feature_names()
-        """
-
-        # adding the node_type_depths
-        node_type_depth_names = node_type_depths.keys()
-        for node_type in node_type_depth_names:
-            depth_vector = np.array(node_type_depths[node_type]).reshape((fns_seen, 1))
-            depth_vector = csr_matrix(depth_vector, shape = (fns_seen, 1))
-            self.counts = hstack([self.counts, depth_vector], format='csr')
-        self.terms += node_type_depth_names
-        del node_type_depth_names
-
-        # AST Node Types TF and TFIDF
-        self.counts = hstack([self.counts, vectorizer.fit_transform(node_types),
-                              vectorizer_tf.fit_transform(node_types)], format='csr')
-        self.terms += vectorizer.get_feature_names() + vectorizer_tf.get_feature_names()
-
-        # AST Node Bigrams TF
-        vectorizer = TfidfVectorizer(analyzer="word", lowercase=False,
-                                     tokenizer=lambda x: x.split(";"))
+        # Character-level
+        if char_flag:
+            self.counts = hstack([self.counts, charLevelFeatures], format = 'csr')
+            self.terms += charfeatureNames
 
 
-        self.counts = hstack([self.counts, vectorizer.fit_transform(node_bigrams)],
-                             format='csr')
-        self.terms += vectorizer.get_feature_names()
+        # Token-Level
+        if tok_flag:
+            # TFIDF
+            self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
+                                 format = 'csr')
+            self.terms += vectorizer.get_feature_names()
+            # Token features
+            self.counts = hstack([self.counts, tokFeatures], format='csr')
+            self.terms += tokfeatureNames
 
-        with open("test/bigrams.txt", "w+") as f:
-            for bigram in vectorizer.get_feature_names():
-                f.write(bigram + "\n")
+
+        # AST-Level
+        if ast_flag:
+            self.counts = hstack([self.counts, depths], format='csr')
+            self.terms += depths_names
+
+            # adding the node_type_depths
+            node_type_depth_names = node_type_depths.keys()
+            for node_type in node_type_depth_names:
+                depth_vector = np.array(node_type_depths[node_type]).reshape((fns_seen, 1))
+                depth_vector = csr_matrix(depth_vector, shape = (fns_seen, 1))
+                self.counts = hstack([self.counts, depth_vector], format='csr')
+            self.terms += node_type_depth_names
+            del node_type_depth_names
+
+            # AST Node Types TF and TFIDF
+            self.counts = hstack([self.counts, vectorizer.fit_transform(node_types),
+                                  vectorizer_tf.fit_transform(node_types)], format='csr')
+            self.terms += vectorizer.get_feature_names() + vectorizer_tf.get_feature_names()
+
+            # AST Node Bigrams TF
+            vectorizer = TfidfVectorizer(analyzer="word", lowercase=False,
+                                         tokenizer=lambda x: x.split(";"))
+            self.counts = hstack([self.counts, vectorizer.fit_transform(node_bigrams)],
+                                 format='csr')
+            self.terms += vectorizer.get_feature_names()
+
+            """
+            with open("test/{}/bigrams.txt".format(self.name), "w+") as f:
+                for bigram in vectorizer.get_feature_names():
+                    f.write(bigram + "\n")
+            """
 
         del inputs, node_types, code_unigrams, node_bigrams
 
         self.target = np.array(self.target)
-        self.featuresDetected = True
+        #self.featuresDetected = True
             #should fit feature detector here
             #then pass it down
     

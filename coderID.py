@@ -106,8 +106,8 @@ class MyPrompt(Cmd):
         file = open(os.getcwd()+"/savedSets/"+gps.name, 'wb')
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
         pickler.dump(copy.deepcopy(gps))
-        
-    
+
+
 
 
     def do_load(self, args):
@@ -132,8 +132,8 @@ class MyPrompt(Cmd):
             self.do_save("")
         
         self.prompt = self.activegps.name+">"
-        
-                    
+
+
 
 
         
@@ -597,10 +597,10 @@ class MyPrompt(Cmd):
             pred.extend(clf.predict(teFeatures[:,selectedFeatures]))
             tar.extend(teTarget)
 
-        
+
         print(classification_report(pred, tar, output_dict=False))
         report = classification_report(pred, tar, output_dict=True)
-         
+
 
         with open(self.resultLocation+expName+"_multi_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)

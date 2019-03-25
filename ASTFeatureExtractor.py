@@ -43,8 +43,7 @@ class ASTFeatures:
         is_leaf = True
 
         node_type = node.type
-        node_ugram = self.node_to_unigram(node)
-        all_ancestors = ancestors + [node_ugram]
+        all_ancestors = ancestors + [node_type]
 
         for c in node.get_children():
             # if this loop is entered, this node cannot be a leaf
@@ -52,9 +51,9 @@ class ASTFeatures:
                 is_leaf = False
 
             #self.bigrams[(node_ugram, self.node_to_unigram(c))] += 1
-            curr_ugram = self.node_to_unigram(c)
+            c_type = c.type
             for ugram in all_ancestors:
-                self.bigrams_text += ugram + "," + curr_ugram + ";"
+                self.bigrams_text += node_type + "," + c_type + ";"
             self.traverse_parent(c, all_ancestors, level + 1)
 
         # non-terminal nodes

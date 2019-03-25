@@ -142,6 +142,7 @@ class featureExtractors:
 
         brackets = {")": "(",
                     "]": "["}
+        seen_fn_params = False
         bracket_stack = collections.deque()
         depth_so_far_brkt = 0
         nesting_depth_brkt = 0

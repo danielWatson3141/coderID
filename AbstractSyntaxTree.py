@@ -39,7 +39,7 @@ class ASTree:
     def traverse(self, node):
         if node is None:
             return None
-        #print(" | ".join([node.type, node.spelling, node.data_type]))
+        print(" | ".join([node.type, node.spelling, node.data_type]))
         for c in node.children:
             self.traverse(c)
 
@@ -397,9 +397,9 @@ class ASTree:
 
     def parse_function(self, tokens):
         args_ind = self.parse_decl_specifiers(tokens)
+        #self.traverse(self.head)
         fn_body_ind = self.parse_args(tokens, args_ind)
-        #print(tokenStrings[args_ind])
-        #print(tokenStrings[fn_body_ind])
+        #self.traverse(self.head)
         self.parse_fn_body(tokens, fn_body_ind)
 
 
