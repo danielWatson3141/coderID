@@ -188,7 +188,8 @@ class Tokenize:
     @staticmethod
     def get_tu(fn_str):
         print("Setting library to: "+find_library('clang'))
-        cindex.Config.set_library_path(find_library('clang'))
+        
+        cindex.Config.set_library_file(find_library('clang'))
 
         idx = cindex.Index.create()
         filename = 'tmp.c'
