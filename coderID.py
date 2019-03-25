@@ -136,7 +136,9 @@ class MyPrompt(Cmd):
                 print("repo name not well formed.")
                 return
             if not os.path.isdir(self.repoLocation+gpsName+"/"+repoName): #check if repo exists
-                self.clone_repo(args)  #clone if not
+                if not self.clone_repo(args):  #clone if not
+                    print("failed to get repo.")
+                    return
         
             self.do_loadGit(self.repoLocation+gpsName+"/"+repoName) #load it
             #self.do_save("")
@@ -844,21 +846,22 @@ class MyPrompt(Cmd):
         if destination == "":
             destination = self.repoLocation + targetRepo.replace("/", "_")
 
-        try:
-            with open(os.getcwd()+"/github.token", 'r') as file:
-                import github
-                g = github.MainClass.Github(file.readline().split("\n")[0], timeout=30)
-            targetRepoURL = g.search_repositories(targetRepo)[0].clone_url
+        
+        with open(os.getcwd()+"/github.token", 'r') as file:
+            import github
+            g = github.MainClass.Github(file.readline().split("\n")[0], timeout=30)
+        targetRepoURL = g.search_repositories(targetRepo)[0].clone_url
 
-            if not os.path.exists(destination):
-                os.mkdir(destination)
-            import git
-            #print("cloning "+targetRepoURL)
-            result = git.Git(destination).clone(targetRepoURL)
-            result
-        except Exception:
-            #print("repo not cloned: "+targetRepo)
-            return False
+        if not os.path.exists(destination):
+            os.mkdir(destination)
+        import git
+        #print("cloning "+targetRepoURL)
+        result = git.Git(destination).clone(targetRepoURL)
+        result
+    
+        #import traceback
+        #traceback.print_exception(e)
+        
         return True
 
     
