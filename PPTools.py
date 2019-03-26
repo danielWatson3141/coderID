@@ -190,7 +190,7 @@ class Tokenize:
     @staticmethod
     def get_tu(fn_str):
         if os.path.isfile("libclang-3.9.so.1"): #fix for Graham
-            lib = os.getcwd()+"libclang-3.9.so.1"
+            lib = os.getcwd()+"/libclang-3.9.so.1"
             print("Setting library to: "+lib)
             cindex.Config.set_library_file(lib)
         else:
