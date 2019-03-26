@@ -161,7 +161,7 @@ class Tokenize:
         tokens_to_process = tokens
         if ignore_comments:
             tokens_to_process = list([x for x in tokens if str(x.kind) != "TokenKind.COMMENT"])
-        tokenStrings = map(lambda x: Tokenize.trainingRepresentative(x), tokens_to_process)
+        tokenStrings = map(lambda x: str(Tokenize.trainingRepresentative(x)), tokens_to_process)
         return " ".join(tokenStrings)
 
     @staticmethod
@@ -189,13 +189,14 @@ class Tokenize:
 
     @staticmethod
     def get_tu(fn_str):
-        if os.path.isfile("libclang-3.9.so.1"): #fix for Graham
-            lib = os.getcwd()+"/libclang-3.9.so.1"
-            print("Setting library to: "+lib)
-            cindex.Config.set_library_file(lib)
-        else:
-            print("Setting library to: "+find_library('clang'))
-            cindex.Config.set_library_file(find_library('clang'))
+        if not cindex.Config.loaded:
+            if os.path.isdir("lib"): #fix for Graham
+                lib = os.getcwd()+"/lib"
+                print("Setting library to: "+lib)
+                cindex.Config.set_library_path(lib)
+            else:
+                print("Setting library to: "+find_library('clang'))
+                cindex.Config.set_library_path(find_library('clang'))
         idx = cindex.Index.create()
         filename = 'tmp.c'
         return idx.parse(filename, unsaved_files=[(filename, fn_str)],

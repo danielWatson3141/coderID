@@ -802,7 +802,10 @@ class MyPrompt(Cmd):
 
         for row in tqdm(data[1:nReposToFetch+1]):
             repo = row[0]
-            self.do_getRepo(repo)
+            try:
+                self.do_getRepo(repo)
+            except Exception:
+                print("skipping "+repo)
 
     @staticmethod
     def bestNFeatures(imp, names, n):
