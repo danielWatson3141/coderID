@@ -1,0 +1,33 @@
+The problem was the libclang.so issue
+
+normally this file is in usr/lib/..
+
+but graham's dfs didn't have it here, or anywhere that I could find.
+
+So, I figured out that I could get the lib to load by downloading the correct version of the file
+from the LLVM distros page and placing it in the libs dir of coderID
+
+Problem is, the so file version must match the clang version which must match
+the clang python bindings version
+
+The problem here is that only clang v 3.9.1 is available on Graham atm...
+
+Okay, so install the python bindings that match this version. Done.
+
+Except the bindings at this level are in Python 2 (Rage face)
+
+Ok, so convert the bindings with 2to3. Worked...
+
+But this introduced some typing issues with the ctypes layer of the python bindings
+
+So, go edit the newly generated version of cindex.py to fix the bugs. 
+
+Had to fix 3, all fixed by type casting str to bytes as in: 
+
+s = bytes(s, 'utf-8')
+
+After changing this, the output type of a method in PPTools changed, so a code change was needed.
+
+Another type cast, this time from bytes to string.
+
+And voila, 5 hours later, working PyClang. 
