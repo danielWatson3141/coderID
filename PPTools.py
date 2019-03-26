@@ -7,17 +7,6 @@ from clang import cindex
 from ctypes.util import find_library
 
 
-if os.path.isfile("libclang-3.9.so.1"): #fix for Graham
-    lib = os.getcwd()+"libclang-3.9.so.1"
-    print("Setting library to: "+lib)
-    cindex.Config.set_library_file(lib)
-else:
-    print("Setting library to: "+find_library('clang'))
-    cindex.Config.set_library_file(find_library('clang'))
-
-
-
-
 
 def is_number(s):
     try:
@@ -200,7 +189,13 @@ class Tokenize:
 
     @staticmethod
     def get_tu(fn_str):
-        
+        if os.path.isfile("libclang-3.9.so.1"): #fix for Graham
+            lib = os.getcwd()+"libclang-3.9.so.1"
+            print("Setting library to: "+lib)
+            cindex.Config.set_library_file(lib)
+        else:
+            print("Setting library to: "+find_library('clang'))
+            cindex.Config.set_library_file(find_library('clang'))
         idx = cindex.Index.create()
         filename = 'tmp.c'
         return idx.parse(filename, unsaved_files=[(filename, fn_str)],
