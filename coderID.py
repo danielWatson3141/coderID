@@ -25,7 +25,6 @@ from sklearn.metrics import classification_report
 from plotting import plot_roc_auc_curves, plot_function_length_histogram
 
 
-
 from tqdm import tqdm
 
 class MyPrompt(Cmd):
@@ -51,7 +50,6 @@ class MyPrompt(Cmd):
                 os.mkdir(direc)
                 print("directory ", direc, " Created.")
 
-        self.do_refresh("")
 
         for gps in self.gpsList:
             self.do_load(gps)
