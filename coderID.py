@@ -70,6 +70,7 @@ class MyPrompt(Cmd):
             self.activegps = gitProfileSet.gitProfileSet(args)
             self.gpsList.add(args)
 
+        print("New set created: "+self.activegps.name)
         self.prompt = self.activegps.name+">"
 
     def do_refresh(self, args):
@@ -254,7 +255,7 @@ class MyPrompt(Cmd):
             teTarget = targets[test]    #...and the test set.
 
             conf = dict()
-            for author in tqdm(self.activegps.authors.keys()):
+            for author in (self.activegps.authors.keys()):
                 clf = Classifier.Classifier().model
                 auth_trFeatures = self.reFeSe(clf, trFeatures, trTarget)    #feature select for the athor
                 clf = self.train_binary(trFeatures[:,auth_trFeatures], trTarget, author)
@@ -428,7 +429,7 @@ class MyPrompt(Cmd):
         print("Generating Class Report")
 
         results = dict()
-        for authorName in tqdm(self.activegps.authors.keys()):
+        for authorName in (self.activegps.authors.keys()):
             results.update(
                 {authorName:
                     self.twoClassTest(authorName, dictOutput=True)
@@ -578,7 +579,7 @@ class MyPrompt(Cmd):
         #print("Cross Validating")
         features = self.activegps.counts
         targets = self.activegps.target
-        for train, test in tqdm(list(cv.split(features, targets))):
+        for train, test in (list(cv.split(features, targets))):
 
             trFeatures = features[train]
             trTarget = targets[train]   #grab the training set...
@@ -653,7 +654,7 @@ class MyPrompt(Cmd):
 
         new = dict()
         count = 0
-        for item in tqdm(old.items()):
+        for item in (old.items()):
             #print(item)
             if len(item[1].functions) >= k and len(item[1].functions) <= m:
                 new.update([item])
@@ -798,7 +799,7 @@ class MyPrompt(Cmd):
 
         print("Fetching necessary repos...")
 
-        for row in tqdm(data[1:nReposToFetch+1]):
+        for row in (data[1:nReposToFetch+1]):
             repo = row[0]
             try:
                 self.do_getRepo(repo)

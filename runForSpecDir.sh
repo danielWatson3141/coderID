@@ -14,21 +14,19 @@ numToRun=$SLURM_ARRAY_TASK_ID #this is slurm task id
 
 echo $numToRun
 
-
-
-
 tmp=$SLURM_TMPDIR #this is allocated temp dir
 
 iter=1
 
-cp -r ~/ENV $tmp	#copy Python env to make things faster
+cp -a ~/ENV $tmp	#copy Python env to make things faster
 source $tmp/ENV/bin/activate
 
-cp -r "/home/dj2watso/coderID/" $tmp	#copy over the whole coderID dir to make things quicker
+cp -a "/home/dj2watso/coderID/" $tmp	#copy over the whole coderID dir to make things quicker
 
-echo $(ls $tmp)
+#tail $tmp/coderID/runAllExperiments.sh
+#ls $tmp
 
-SourceDir="$tmp/coderID/repos"
+SourceDir="/home/dj2watso/projects/def-m2nagapp/dj2watso/repos"
 
 echo "Source dir:"$SourceDir
 
@@ -38,8 +36,14 @@ do
 
 		base=$(basename $dir)
 
-		echo "running "$base" from "$dir
-		./$tmp/coderID/runAllExperiments.sh "$dir" "$base" #run experiments, hopefully all from tmp
+		echo "copying "$dir" to "$tmp
+
+		rundir=$tmp"/"$base 
+		#ls $tmp/coderID
+
+		echo "running "$base" from "$rundir
+		tail $tmp/coderID/runAllExperiments.sh
+		$tmp/coderID/runAllExperiments.sh $rundir "$base" #run experiments, hopefully all from tmp
 
 		cp $tmp/coderID/classResults/* classResults/	#copy the results back over
 		cp $tmp/coderID/plots/* plots/

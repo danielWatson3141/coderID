@@ -49,7 +49,11 @@ class gitProfileSet:
     
     def compileAuthors(self, authors = None):
         """Mine all repos in the repo list for commits by those in authors. None for get all"""
+        print("mining "+self.name)
         for repo in self.repos:
+            if not os.path.exists(repo+"/.git"): #in case the repo is one level down
+                repo = os.listdir(repo)[0]
+                print("moved to "+repo)
             if repo in self.minedRepos:
                 continue
             elif authors is not None:
@@ -57,9 +61,9 @@ class gitProfileSet:
             miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
             repository = pydriller.GitRepository(repo)
             print("Scanning repo: "+miner._path_to_repo)
-            
+                        
 
-            for commit in tqdm(miner.traverse_commits()):
+            for commit in (miner.traverse_commits()):
                 author = commit.author
                 
                 if authors is not None and author not in authors:
@@ -164,7 +168,7 @@ class gitProfileSet:
         print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
 
-        for author in tqdm(self.authors.values()):
+        for author in (self.authors.values()):
             if numAuthors != -1 and authors_seen == numAuthors:
                     break
             authors_seen += 1
@@ -346,7 +350,7 @@ class gitAuthor:
         gps = gitProfileSet(self.name)
 
         print("fetching repos...")
-        for repo in tqdm(repos):
+        for repo in (repos):
             if repo not in self.repos:
                 gps.addRepo(repo)
 
