@@ -13,6 +13,7 @@ import ProfileSet
 import testCommitClassification
 import copy
 import numpy as np
+import pandas as pd
 import csv
 import Classifier
 import PPTools
@@ -23,7 +24,6 @@ from sklearn import metrics, utils
 from sklearn.metrics import classification_report
 
 from plotting import plot_roc_auc_curves, plot_function_length_histogram
-
 
 
 from tqdm import tqdm
@@ -51,7 +51,6 @@ class MyPrompt(Cmd):
                 os.mkdir(direc)
                 print("directory ", direc, " Created.")
 
-        self.do_refresh("")
 
         for gps in self.gpsList:
             self.do_load(gps)
@@ -62,7 +61,8 @@ class MyPrompt(Cmd):
 
         self.prompt = self.activegps.name+">"
         #print("Current set: "+self.activegps.name)
-        
+
+
     def do_new(self, args):
         """Re-initializes profile set to be empty"""
         if args == "":
@@ -72,6 +72,7 @@ class MyPrompt(Cmd):
             self.activegps = gitProfileSet.gitProfileSet(args)
             self.gpsList.add(args)
 
+        print("New set created: "+self.activegps.name)
         self.prompt = self.activegps.name+">"
 
     def do_refresh(self, args):
@@ -256,7 +257,7 @@ class MyPrompt(Cmd):
             teTarget = targets[test]    #...and the test set.
 
             conf = dict()
-            for author in tqdm(self.activegps.authors.keys()):
+            for author in (self.activegps.authors.keys()):
                 clf = Classifier.Classifier().model
                 auth_trFeatures = self.reFeSe(clf, trFeatures, trTarget)    #feature select for the athor
                 clf = self.train_binary(trFeatures[:,auth_trFeatures], trTarget, author)
@@ -430,7 +431,7 @@ class MyPrompt(Cmd):
         print("Generating Class Report")
 
         results = dict()
-        for authorName in tqdm(self.activegps.authors.keys()):
+        for authorName in (self.activegps.authors.keys()):
             results.update(
                 {authorName:
                     self.twoClassTest(authorName, dictOutput=True)
@@ -580,7 +581,7 @@ class MyPrompt(Cmd):
         #print("Cross Validating")
         features = self.activegps.counts
         targets = self.activegps.target
-        for train, test in tqdm(list(cv.split(features, targets))):
+        for train, test in (list(cv.split(features, targets))):
 
             trFeatures = features[train]
             trTarget = targets[train]   #grab the training set...
@@ -655,7 +656,7 @@ class MyPrompt(Cmd):
 
         new = dict()
         count = 0
-        for item in tqdm(old.items()):
+        for item in (old.items()):
             #print(item)
             if len(item[1].functions) >= k and len(item[1].functions) <= m:
                 new.update([item])
@@ -678,6 +679,34 @@ class MyPrompt(Cmd):
         """Displays all authors found in the currently loaded git repos"""
         self.activegps.displayAuthors()
         #print(self.activegps)
+
+
+    def do_generateGpsReport(self, args):
+        """
+        Generates the details of each compiled repository.
+        """
+        cols = ["num_unique_authors", "num_functions",
+                "num_lines_of_code", "avg_lines_of_code"]
+        report = {}
+
+        for gpsName in self.gpsList:
+            gps = self.loadGPSFromFile(gpsName)
+            author_functions = gps.getAllFunctions()
+            num_functions = len(author_functions)
+            num_lines_of_code = 0
+            for function in author_functions:
+                num_lines_of_code += len(function.split("\n"))
+
+            avg_lines_of_code = num_lines_of_code / num_functions
+            # name, number of unique authors, number of functions, LOC, avg LOC,
+            report[gps.name] = [len(gps.authors), num_functions,
+                                num_lines_of_code, avg_lines_of_code]
+
+        report = pd.DataFrame.from_dict(report, orient="index", columns=cols)
+        report.index.name = "repo_name"
+        file_loc = os.getcwd() + "/sample_reports/repos_breakdown.csv"
+        report.to_csv(file_loc)
+
 
     def do_displayAndPlotFunctionLengths(self, args):
         """
@@ -800,7 +829,7 @@ class MyPrompt(Cmd):
 
         print("Fetching necessary repos...")
 
-        for row in tqdm(data[1:nReposToFetch+1]):
+        for row in (data[1:nReposToFetch+1]):
             repo = row[0]
             try:
                 self.do_getRepo(repo)

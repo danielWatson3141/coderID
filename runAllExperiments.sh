@@ -3,6 +3,8 @@ REPO="$1"
 SESSION="$2"
 MIN_FUNCTIONS=50
 
+echo "running experiments"
+
 # Parse command line args
 if [ "$#" -gt 3 ] || [ "$#" -lt 1 ]; then
     echo "Invalid number of parameters. Usage: ./$0 repopath [ sessionName ] [ minFunctions ]"
