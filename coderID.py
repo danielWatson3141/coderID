@@ -13,6 +13,7 @@ import ProfileSet
 import testCommitClassification
 import copy
 import numpy as np
+import pandas as pd
 import csv
 import Classifier
 import PPTools
@@ -60,7 +61,8 @@ class MyPrompt(Cmd):
 
         self.prompt = self.activegps.name+">"
         #print("Current set: "+self.activegps.name)
-        
+
+
     def do_new(self, args):
         """Re-initializes profile set to be empty"""
         if args == "":
@@ -677,6 +679,34 @@ class MyPrompt(Cmd):
         """Displays all authors found in the currently loaded git repos"""
         self.activegps.displayAuthors()
         #print(self.activegps)
+
+
+    def do_generateGpsReport(self, args):
+        """
+        Generates the details of each compiled repository.
+        """
+        cols = ["num_unique_authors", "num_functions",
+                "num_lines_of_code", "avg_lines_of_code"]
+        report = {}
+
+        for gpsName in self.gpsList:
+            gps = self.loadGPSFromFile(gpsName)
+            author_functions = gps.getAllFunctions()
+            num_functions = len(author_functions)
+            num_lines_of_code = 0
+            for function in author_functions:
+                num_lines_of_code += len(function.split("\n"))
+
+            avg_lines_of_code = num_lines_of_code / num_functions
+            # name, number of unique authors, number of functions, LOC, avg LOC,
+            report[gps.name] = [len(gps.authors), num_functions,
+                                num_lines_of_code, avg_lines_of_code]
+
+        report = pd.DataFrame.from_dict(report, orient="index", columns=cols)
+        report.index.name = "repo_name"
+        file_loc = os.getcwd() + "/sample_reports/repos_breakdown.csv"
+        report.to_csv(file_loc)
+
 
     def do_displayAndPlotFunctionLengths(self, args):
         """
