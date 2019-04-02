@@ -54,6 +54,8 @@ class gitProfileSet:
                 continue
             elif authors is not None:
                 self.minedRepos.add(repo)
+            if not os.path.exists(repo+".git")
+                repo = os.listdir(repo)[0]
             miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
             repository = pydriller.GitRepository(repo)
             print("Scanning repo: "+miner._path_to_repo)
