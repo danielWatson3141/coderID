@@ -37,6 +37,7 @@ class gitProfileSet:
         self.featuresSelected = None
         self.termsSelected = None
         self.minedRepos = set()
+        self.featureTypes = dict()
 
     def addRepo(self, args):
         print("Adding repo: "+args)
@@ -58,7 +59,7 @@ class gitProfileSet:
                 continue
             elif authors is not None:
                 self.minedRepos.add(repo)
-            if not os.path.exists(repo+".git")
+            if not os.path.exists(repo+".git"):
                 repo = os.listdir(repo)[0]
             miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
             repository = pydriller.GitRepository(repo)
@@ -257,6 +258,15 @@ class gitProfileSet:
         self.counts = hstack([charLevelFeatures, depths, tokFeatures], format = 'csr')
         self.terms = charfeatureNames + depths_names + tokfeatureNames
 
+        def updateTypes(names, typeName):
+            if not hasattr(self, "featureTypes"):
+                self.featureTypes = dict()
+            for name in names:
+                self.featureTypes[name] = typeName
+
+        updateTypes(charfeatureNames, "char")
+        updateTypes(depths_names, "AST")
+        updateTypes(tokfeatureNames, "token")
         # adding the node_type_depths
         node_type_depth_names = node_type_depths.keys()
         for node_type in node_type_depth_names:
@@ -264,17 +274,23 @@ class gitProfileSet:
             depth_vector = csr_matrix(depth_vector, shape = (fns_seen, 1))
             self.counts = hstack([self.counts, depth_vector], format='csr')
         self.terms += node_type_depth_names
+        updateTypes(node_type_depth_names, "AST")
         del node_type_depth_names
 
         # Tokens TFIDF
         self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
                              format = 'csr')
         self.terms += vectorizer.get_feature_names()
+        updateTypes(vectorizer.get_feature_names(), "token_TF/IDF")
 
         # AST Node Types TF and TFIDF
         self.counts = hstack([self.counts, vectorizer.fit_transform(node_types),
                               vectorizer_tf.fit_transform(node_types)], format='csr')
         self.terms += vectorizer.get_feature_names() + vectorizer_tf.get_feature_names()
+
+        updateTypes(vectorizer.get_feature_names(), "node_type_TF/IDF")
+        updateTypes(vectorizer_tf.get_feature_names(), "node_type_TF")
+        
 
         # AST Node Bigrams TF
         vectorizer = TfidfVectorizer(analyzer="word", lowercase=False,
@@ -283,6 +299,8 @@ class gitProfileSet:
         self.counts = hstack([self.counts, vectorizer.fit_transform(node_bigrams)],
                              format='csr')
         self.terms += vectorizer.get_feature_names()
+        updateTypes(vectorizer.get_feature_names(), "AST_Node_Bigrams_TF/IDF")
+        
 
 
         del inputs, node_types, code_unigrams, node_bigrams

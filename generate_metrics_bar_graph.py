@@ -17,7 +17,9 @@ def get_report_precision_recall(filename):
 
 # Returns list of all overall precision and recall from sessions listed in the file
 def get_session_metrics(filepath, experiment):
-    session_df = pd.read_csv(filepath)
+    
+    with open(filepath, 'rb') as readfile:
+        session_df = pd.read_csv(readfile)
 
     sessions = list(session_df["session"])
     report_paths = list(session_df[experiment+"_filepath"])
@@ -41,6 +43,9 @@ def plot_precision_recall_bar_graph(session_names, session_precisions, session_r
 
     # plot bar graph
     fig, ax = plt.subplots()
+    ax.grid(axis="y")
+    ax.set_axisbelow(True)
+   
     precision_rects = ax.bar(
         index, session_precisions, bar_width,
         color=colors[0], label="Precision"
@@ -49,14 +54,14 @@ def plot_precision_recall_bar_graph(session_names, session_precisions, session_r
         index + bar_width, session_recalls, bar_width,
         color=colors[1], label="Recall"
     )
-    ax.set_xlabel("Session")
+    ax.set_xlabel("Repo")
     ax.set_ylabel("Precision/Recall Score")
     ax.set_title(experiment+" Classification Metric by Repository")
     ax.set_xticks(index + bar_width / 2)
-    ax.set_xticklabels(range(len(session_names)))
+    ax.set_xticklabels(range(1, len(session_names)+1))
     ax.legend(loc="lower right")
-    ax.set_aspect(aspect=1)
-    #plt.show()
+    #ax.set_aspect(aspect=.2)
+    plt.show()
     plt.savefig(experiment+"_prec_recall.png")
 
 
