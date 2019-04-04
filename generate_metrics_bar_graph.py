@@ -7,8 +7,9 @@ import pandas as pd
 # Returns weighted precision and recall from classification report file
 def get_report_precision_recall(filename):
     repo_df = pd.read_csv(filename)
-    repo_df["weighted_precision"] = repo_df["precision"] * repo_df["%"] / 100
-    repo_df["weighted_recall"] = repo_df["recall"] * repo_df["%"] / 100
+    total = sum(repo_df["support"])
+    repo_df["weighted_precision"] = repo_df["precision"] * repo_df["support"] / total
+    repo_df["weighted_recall"] = repo_df["recall"] * repo_df["support"] / total
     repo_precision = repo_df["weighted_precision"].sum()
     repo_recall = repo_df["weighted_recall"].sum()
 
@@ -19,7 +20,7 @@ def get_session_metrics(filepath):
     session_df = pd.read_csv(filepath)
 
     sessions = list(session_df["session"])
-    report_paths = list(session_df["report_filepath"])
+    report_paths = list(session_df["binary_filepath"])
 
     precisions = []
     recalls = []
@@ -54,7 +55,19 @@ def plot_precision_recall_bar_graph(session_names, session_precisions, session_r
     ax.set_xticks(index + bar_width / 2)
     ax.set_xticklabels(session_names)
     ax.legend(loc="lower right")
+    ax.tick_params(labelbottom=False)
     plt.show()
+    plt.savefig("all_binary_prec_recall.png")
+
+import csv
+def write_prec_recall(session_names, session_precisions, session_recalls):
+    
+    with open("all_prec_recall.csv", 'w') as writeFile:
+        writer = csv.writer(writeFile)
+        it = 0
+        for name in session_names:
+            writer.writerow([[session_names[it]], [session_precisions[it]], [session_recalls[it]]])
+            it+=1
 
 
 if __name__ == "__main__":
@@ -66,3 +79,4 @@ if __name__ == "__main__":
     session_file = sys.argv[1]
     session_names, precisions, recalls = get_session_metrics(session_file)
     plot_precision_recall_bar_graph(session_names, precisions, recalls)
+    write_prec_recall(session_names, precisions, recalls)

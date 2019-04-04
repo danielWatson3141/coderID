@@ -32,6 +32,7 @@ def get_binary_weighted_f1_score(filename):
 def get_session_f1_scores(filepath):
 
     # Read in sessions
+    print(filepath)
     session_df = pd.read_csv(filepath)
 
     sessions = list(session_df["session"])
@@ -66,13 +67,14 @@ def plot_multiclass_f1_score(session_names, session_multi_f1_score, session_sing
     )
 
     # Set labels
-    ax.set_xlabel("Session")
+    ax.set_xlabel("Repository")
     ax.set_ylabel("Weighted F1-Score")
     ax.set_title("Multi-class Weighted F1-score by Repository")
     ax.set_xticks(index + bar_width / 2)
-    ax.set_xticklabels(session_names)
+    ax.tick_params(labelbottom=False) 
     ax.legend(loc="lower right")
     plt.show()
+    plt.savefig("all_multi_f1.png")
 
 
 # Plots a bar graph of the weighted f1-score for one-vs-all binary classification for all sessions
@@ -88,12 +90,13 @@ def plot_binary_f1_score(session_names, session_binary_f1_score):
     )
 
     # Set labels
-    ax.set_xlabel("Session")
+    ax.set_xlabel("Repository")
     ax.set_ylabel("Weighted F1-Score")
     ax.set_title("Binary Weighted F1-score by Repository")
     ax.set_xticks(index)
-    ax.set_xticklabels(session_names)
+    ax.tick_params(labelbottom=False) 
     plt.show()
+    plt.savefig("all_binary_f1.png")
 
 
 if __name__ == "__main__":

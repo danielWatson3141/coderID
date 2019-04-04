@@ -17,6 +17,7 @@ import csv
 import Classifier
 import PPTools
 import heapq
+import traceback
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score,ShuffleSplit, StratifiedKFold
 from sklearn import metrics, utils
@@ -50,6 +51,7 @@ class MyPrompt(Cmd):
                 os.mkdir(direc)
                 print("directory ", direc, " Created.")
 
+        self.do_refresh("")
 
         for gps in self.gpsList:
             self.do_load(gps)
@@ -79,10 +81,10 @@ class MyPrompt(Cmd):
         for fileName in os.listdir(self.saveLocation):
             self.gpsList.add(fileName)
 
-        for fileName in os.listdir(self.repoLocation):
-            if fileName not in self.gpsList:
-                self.do_load(fileName)
-                self.do_save("")
+        # for fileName in os.listdir(self.repoLocation):
+        #     if fileName not in self.gpsList:
+        #         self.do_load(fileName)
+        #         self.do_save("")
         
 
     def do_save(self, filepath=''):
@@ -217,6 +219,16 @@ class MyPrompt(Cmd):
                 self.do_compile("")
             else:
                 print("Skipping "+subdir+" as it is already found.")
+
+    def do_mineAll(self, args):
+        """Mine all repos in set list"""
+        for gps in self.gpsList:
+            try:
+                self.do_load(gps)
+                self.do_compile(gps)
+            except Exception as e:
+                print("failed to mine "+gps)
+                traceback.print_exc()
         
     def do_quit(self, args):
         """quits the program WITHOUT SAVING"""
@@ -579,7 +591,7 @@ class MyPrompt(Cmd):
         #print("Cross Validating")
         features = self.activegps.counts
         targets = self.activegps.target
-        for train, test in (list(cv.split(features, targets))):
+        for train, test in tqdm((list(cv.split(features, targets)))):
 
             trFeatures = features[train]
             trTarget = targets[train]   #grab the training set...
@@ -799,7 +811,7 @@ class MyPrompt(Cmd):
 
         print("Fetching necessary repos...")
 
-        for row in (data[1:nReposToFetch+1]):
+        for row in tqdm((data[1:nReposToFetch+1])):
             repo = row[0]
             try:
                 self.do_getRepo(repo)
