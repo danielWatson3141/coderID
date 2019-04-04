@@ -12,3 +12,4 @@
 *.token
 ghmining*.json
 allExperiments.cid
+*.vscode*

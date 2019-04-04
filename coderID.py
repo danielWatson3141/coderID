@@ -13,6 +13,7 @@ import ProfileSet
 import testCommitClassification
 import copy
 import numpy as np
+import pandas as pd
 import csv
 import Classifier
 import PPTools
@@ -61,8 +62,10 @@ class MyPrompt(Cmd):
         self.activegps = gitProfileSet.gitProfileSet("default")
 
         self.prompt = self.activegps.name+">"
-        #print("Current set: "+self.activegps.name)
         
+        #print("Current set: "+self.activegps.name)
+
+
     def do_new(self, args):
         """Re-initializes profile set to be empty"""
         if args == "":
@@ -258,6 +261,7 @@ class MyPrompt(Cmd):
         #print("Cross Validating")
         features = self.activegps.counts
         targets = self.activegps.target
+        names = self.activegps.terms
         for train, test in cv.split(features, targets):
 
             trFeatures = features[train]
@@ -348,12 +352,8 @@ class MyPrompt(Cmd):
         return clf #return the model
 
     def reFeSe(self, model, features, targets):
-         #train with all features to start
+         #returns indeces of best features
 
-        previous = 0
-        strength = .01
-        previousBest = range(0, features.shape[1])
-        best = None
         nFeatures = features.shape[1]
 
         #reduce sample size to decrease training time
@@ -365,26 +365,45 @@ class MyPrompt(Cmd):
             features = features[samples,:]
             targets = targets[samples]
 
+        featureSubset = features
+        previous = 0
+        strength = .01
+        previousBest = range(0, features.shape[1])
+        best = None
+        once = True #run at least once
         #choose optimal feature set size
         while True:
             previous = strength
             
-            strength, importances = self.evaluate(model, features, targets)
+            strength, importances = self.evaluate(model, featureSubset, targets)
             #print((nFeatures, strength))
-            if strength < previous:
+            if strength < previous and not once:
                 break
+            if once:
+                once = False
             from operator import itemgetter
-            match = zip(range(0, features.shape[1]), importances)            
-            
-            nFeatures = int((1-reductionFactor)*nFeatures)
+            match = list(zip(previousBest, importances))
+
+            nonZero = np.where([m[1] > 0 for m in match])[0]
+            nzero = (nFeatures) - len(nonZero)
+
+            match = [match[i] for i in nonZero]
             
             if best is not None:
-                previousBest = best
+                    previousBest = best
 
-            best = list(map(lambda x: x[0], heapq.nlargest(nFeatures, match, key = itemgetter(1))))
-
-            features = features[:,best]
-
+            if nzero > reductionFactor*nFeatures: #get rid of all 0 importance features
+                nFeatures = nFeatures - nzero
+                best = [m[0] for m in match]
+                featureSubset = features[:,best]
+                #do at least once more
+                once = True
+            else:   #if there are not many, sort and keep the top non-zero ones
+                nFeatures = int((1-reductionFactor)*nFeatures)-nzero
+                best = list(heapq.nlargest(nFeatures, match, key = itemgetter(1)))
+                best = [b[0] for b in best]
+                featureSubset = features[:,best]
+        
         return previousBest
         
 
@@ -501,6 +520,7 @@ class MyPrompt(Cmd):
         
         targets = self.activegps.target
         features = self.activegps.counts
+        names = self.activegps.terms
 
         targets = self.binaryify(targets, author)[0]   #make problem binary
 
@@ -591,7 +611,11 @@ class MyPrompt(Cmd):
         #print("Cross Validating")
         features = self.activegps.counts
         targets = self.activegps.target
-        for train, test in tqdm((list(cv.split(features, targets)))):
+
+        names = self.activegps.terms
+        selectedTermCounts = dict()
+        featureImportances = dict()
+        for train, test in tqdm(list(cv.split(features, targets))):
 
             trFeatures = features[train]
             trTarget = targets[train]   #grab the training set...
@@ -604,9 +628,25 @@ class MyPrompt(Cmd):
             
             selectedFeatures = self.reFeSe(clf, trFeatures, trTarget)
             trFeatures = trFeatures[:,selectedFeatures]    #feature select for the athor
-            
+            selectedNames = [names[i] for i in selectedFeatures]
+
             clf.fit(trFeatures, trTarget)
 
+            importances = clf.feature_importances_
+
+            for term in selectedNames:
+                if term in selectedTermCounts:
+                    selectedTermCounts[term] += 1
+                else:
+                    selectedTermCounts[term] = 1
+
+            for i in range(0, len(importances)):
+                name = selectedNames[i]
+                if name in featureImportances:
+                    featureImportances[name]+=importances[i]
+                else:
+                    featureImportances[name]=importances[i]
+                
             pred.extend(clf.predict(teFeatures[:,selectedFeatures]))
             tar.extend(teTarget)
 
@@ -628,6 +668,18 @@ class MyPrompt(Cmd):
                 row = [authorName]+[value for key, value in result.items()]
                 print(row)
                 w.writerow(row)
+
+        with open(self.resultLocation + expName + "_single_model_multi_features.csv", 'w+') as reportFile:
+            w = csv.writer(reportFile)
+            header = ["feature Name","Type", "FoldsSelected", "sumImportance"]
+            #print(header)
+            w.writerow(header)
+            #make feature report
+            for name in selectedTermCounts.keys():
+                row = [name, self.activegps.featureTypes[name], selectedTermCounts[name], featureImportances[name]]
+                print(row)
+                w.writerow(row)
+
 
 
 
@@ -689,6 +741,48 @@ class MyPrompt(Cmd):
         """Displays all authors found in the currently loaded git repos"""
         self.activegps.displayAuthors()
         #print(self.activegps)
+
+
+    def do_generateGpsReport(self, args):
+        """
+        Generates the details of each compiled repository.
+        """
+        cols = ["num_unique_authors", "num_functions",
+                "num_lines_of_code", "avg_lines_of_code"]
+        report = {}
+
+        if args == "":
+            print("must supply a filepath to a session datasheet")
+            return
+
+        session_df = pd.read_csv(args)
+
+        sessions = list(session_df["session"])
+        self.do_refresh("")
+
+        for gpsName in sessions:
+            self.do_load(gpsName)
+            self.do_pruneGit("1000 50 1000")
+            gps = self.activegps
+            print(gps.name)
+            #self.do_displayGitAuthors("")
+            author_functions = gps.getAllFunctions()
+            num_functions = len(author_functions)
+            print(num_functions)
+            num_lines_of_code = 0
+            for function in author_functions:
+                num_lines_of_code += len(function.split("\n"))
+
+            avg_lines_of_code = num_lines_of_code / num_functions
+            # name, number of unique authors, number of functions, LOC, avg LOC,
+            report[gps.name] = [len(gps.authors), num_functions,
+                                num_lines_of_code, avg_lines_of_code]
+
+        report = pd.DataFrame.from_dict(report, orient="index", columns=cols)
+        report.index.name = "repo_name"
+        file_loc = os.getcwd() + "/sample_reports/repos_breakdown.csv"
+        report.to_csv(file_loc)
+
 
     def do_displayAndPlotFunctionLengths(self, args):
         """
