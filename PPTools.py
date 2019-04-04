@@ -189,14 +189,17 @@ class Tokenize:
 
     @staticmethod
     def get_tu(fn_str):
-        if not cindex.Config.loaded:
-            if os.path.isdir("lib"): #fix for Graham
-                lib = os.getcwd()+"/lib"
-                print("Setting library to: "+lib)
-                cindex.Config.set_library_path(lib)
-            else:
-                print("Setting library to: "+find_library('clang'))
-                cindex.Config.set_library_path(find_library('clang'))
+        try:
+            idx = cindex.Index.create()
+        except:
+            if not cindex.Config.loaded:
+                if os.path.isdir("lib"): #fix for Graham
+                    lib = os.getcwd()+"/lib"
+                    print("Setting library to: "+lib)
+                    cindex.Config.set_library_path(lib)
+                else:
+                    print("Setting library to: "+find_library('clang'))
+                    cindex.Config.set_library_path(find_library('clang'))
         idx = cindex.Index.create()
         filename = 'tmp.c'
         return idx.parse(filename, unsaved_files=[(filename, fn_str)],

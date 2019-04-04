@@ -7,19 +7,22 @@ import pandas as pd
 # Returns weighted precision and recall from classification report file
 def get_report_precision_recall(filename):
     repo_df = pd.read_csv(filename)
-    repo_df["weighted_precision"] = repo_df["precision"] * repo_df["%"] / 100
-    repo_df["weighted_recall"] = repo_df["recall"] * repo_df["%"] / 100
+    total = sum(repo_df["support"])
+    repo_df["weighted_precision"] = repo_df["precision"] * repo_df["support"] / total
+    repo_df["weighted_recall"] = repo_df["recall"] * repo_df["support"] / total
     repo_precision = repo_df["weighted_precision"].sum()
     repo_recall = repo_df["weighted_recall"].sum()
 
     return repo_precision, repo_recall
 
 # Returns list of all overall precision and recall from sessions listed in the file
-def get_session_metrics(filepath):
-    session_df = pd.read_csv(filepath)
+def get_session_metrics(filepath, experiment):
+    
+    with open(filepath, 'rb') as readfile:
+        session_df = pd.read_csv(readfile)
 
     sessions = list(session_df["session"])
-    report_paths = list(session_df["report_filepath"])
+    report_paths = list(session_df[experiment+"_filepath"])
 
     precisions = []
     recalls = []
@@ -31,7 +34,7 @@ def get_session_metrics(filepath):
     return sessions, precisions, recalls
 
 # Plots a bar graph of the session names, list of precision, and list of recall
-def plot_precision_recall_bar_graph(session_names, session_precisions, session_recalls):
+def plot_precision_recall_bar_graph(session_names, session_precisions, session_recalls, experiment):
     index = np.arange(len(session_names))
     bar_width = 0.35
 
@@ -40,6 +43,9 @@ def plot_precision_recall_bar_graph(session_names, session_precisions, session_r
 
     # plot bar graph
     fig, ax = plt.subplots()
+    ax.grid(axis="y")
+    ax.set_axisbelow(True)
+   
     precision_rects = ax.bar(
         index, session_precisions, bar_width,
         color=colors[0], label="Precision"
@@ -48,13 +54,26 @@ def plot_precision_recall_bar_graph(session_names, session_precisions, session_r
         index + bar_width, session_recalls, bar_width,
         color=colors[1], label="Recall"
     )
-    ax.set_xlabel("Session")
+    ax.set_xlabel("Repo")
     ax.set_ylabel("Precision/Recall Score")
-    ax.set_title("Classification Metric by Repository")
+    ax.set_title(experiment+" Classification Metric by Repository")
     ax.set_xticks(index + bar_width / 2)
-    ax.set_xticklabels(session_names)
+    ax.set_xticklabels(range(1, len(session_names)+1))
     ax.legend(loc="lower right")
+    #ax.set_aspect(aspect=.2)
     plt.show()
+    plt.savefig(experiment+"_prec_recall.png")
+
+
+import csv
+def write_prec_recall(session_names, session_precisions, session_recalls, experiment):
+    
+    with open(experiment+"_prec_recall.csv", 'w') as writeFile:
+        writer = csv.writer(writeFile)
+        it = 0
+        for name in session_names:
+            writer.writerow([str(session_names[it]), float(session_precisions[it]), float(session_recalls[it])])
+            it+=1
 
 
 if __name__ == "__main__":
@@ -64,5 +83,7 @@ if __name__ == "__main__":
         exit(1)
 
     session_file = sys.argv[1]
-    session_names, precisions, recalls = get_session_metrics(session_file)
-    plot_precision_recall_bar_graph(session_names, precisions, recalls)
+    for experiment in ["binary", "multi", "single_model_multi"]:
+        session_names, precisions, recalls = get_session_metrics(session_file, experiment)
+        plot_precision_recall_bar_graph(session_names, precisions, recalls, experiment)
+        write_prec_recall(session_names, precisions, recalls, experiment)

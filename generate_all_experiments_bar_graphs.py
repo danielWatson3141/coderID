@@ -56,6 +56,8 @@ def plot_multiclass_f1_score(session_names, session_multi_f1_score, session_sing
 
     # Plot bar graph
     fig, ax = plt.subplots()
+    ax.grid(axis="y")
+    ax.set_axisbelow(True)
     multi_rects = ax.bar(
             index, session_multi_f1_score, bar_width,
             color=colors["orange"], label="One-vs-all multi"
@@ -66,11 +68,11 @@ def plot_multiclass_f1_score(session_names, session_multi_f1_score, session_sing
     )
 
     # Set labels
-    ax.set_xlabel("Session")
+    ax.set_xlabel("Repo")
     ax.set_ylabel("Weighted F1-Score")
     ax.set_title("Multi-class Weighted F1-score by Repository")
     ax.set_xticks(index + bar_width / 2)
-    ax.set_xticklabels(session_names)
+    ax.set_xticklabels(range(1, len(session_names)+1 ))
     ax.legend(loc="lower right")
     plt.show()
 
@@ -82,17 +84,19 @@ def plot_binary_f1_score(session_names, session_binary_f1_score):
 
     # Plot bar graph
     fig, ax = plt.subplots()
+    ax.grid(axis="y")
+    ax.set_axisbelow(True)
     binary_rects = ax.bar(
             index, session_binary_f1_score, bar_width,
             color=colors["purple"]
     )
 
     # Set labels
-    ax.set_xlabel("Session")
+    ax.set_xlabel("Repo")
     ax.set_ylabel("Weighted F1-Score")
     ax.set_title("Binary Weighted F1-score by Repository")
     ax.set_xticks(index)
-    ax.set_xticklabels(session_names)
+    ax.set_xticklabels(range(len(session_names)))
     plt.show()
 
 
