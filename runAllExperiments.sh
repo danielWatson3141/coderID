@@ -3,7 +3,8 @@ REPO="$1"
 SESSION="$2"
 MIN_FUNCTIONS=50
 
-echo "running experiments"
+echo "running session "$SESSION" for "$REPO
+echo "from "$PWD
 
 # Parse command line args
 if [ "$#" -gt 3 ] || [ "$#" -lt 1 ]; then
@@ -22,9 +23,8 @@ fi
 FILE="allExperiments.cid"
 
 cat > $FILE <<- EOM
-new ${SESSION}
-loadGit ${REPO}
-compile
+load ${REPO}
+displayGitAuthors
 pruneGit 1000 ${MIN_FUNCTIONS} 1000
 multiClassSingleModelTest
 multiClassTest

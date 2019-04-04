@@ -51,10 +51,10 @@ class MyPrompt(Cmd):
                 print("directory ", direc, " Created.")
 
 
-        for gps in self.gpsList:
-            self.do_load(gps)
-            return
-            break #just do it once. Hack around getting a single arbitrary element from set
+        # for gps in self.gpsList:
+        #     self.do_load(gps)
+        #     return
+        #     break #just do it once. Hack around getting a single arbitrary element from set
         
         self.activegps = gitProfileSet.gitProfileSet("default")
 
@@ -79,10 +79,10 @@ class MyPrompt(Cmd):
         for fileName in os.listdir(self.saveLocation):
             self.gpsList.add(fileName)
 
-        for fileName in os.listdir(self.repoLocation):
-            if fileName not in self.gpsList:
-                self.do_load(fileName)
-                self.do_save("")
+        # for fileName in os.listdir(self.repoLocation):
+        #     if fileName not in self.gpsList:
+        #         self.do_load(fileName)
+        #         self.do_save("")
         
 
     def do_save(self, filepath=''):
@@ -117,6 +117,7 @@ class MyPrompt(Cmd):
     def do_load(self, args):
         """Switches currently active gps to one with given name. ***PROLLY SHOULD SAVE FIRST***"""
         
+        self.do_refresh("")
         if(args == ""):
             print("Error, must supply name of existing gps. Use 'new' to start a fresh one.")
             return None
@@ -829,7 +830,9 @@ class MyPrompt(Cmd):
                         elif line.isspace():
                             continue
                         else:
+                            print("coderID>"+line)
                             self.onecmd(line)
+                            
                     except Exception as e:
                         print(e)
                         print("invalid command: " + line)

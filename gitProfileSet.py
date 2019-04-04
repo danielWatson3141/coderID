@@ -54,78 +54,96 @@ class gitProfileSet:
             if not os.path.exists(repo+"/.git"): #in case the repo is one level down
                 repo = os.listdir(repo)[0]
                 print("moved to "+repo)
+            repo = os.path.abspath(repo)
+            print("absolute path resolved to "+repo)
+    
             if repo in self.minedRepos:
                 continue
             elif authors is not None:
                 self.minedRepos.add(repo)
+            
+            
             miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
             repository = pydriller.GitRepository(repo)
             print("Scanning repo: "+miner._path_to_repo)
                         
+            import time
+            inc = 0
+            lastReport = time.time()
+            import traceback
+            try:
+                for commit in (miner.traverse_commits()):
+                    print("before time")
+                    inc+=1
+                    elapsed = time.time() - lastReport
+                    if ( elapsed > 30 ):
+                        print(str(inc/elapsed) + "it/s")
+                        inc = 0
+                        lastReport = time.time()
 
-            for commit in (miner.traverse_commits()):
-                author = commit.author
-                
-                if authors is not None and author not in authors:
-                    continue
-                
-                if True:    #for now, not worried about commit type
-                    if author.name not in self.authors:
-                        self.authors.update({author.name:gitAuthor(author)})
-                        #print("Found new author: "+author.name)
+                    author = commit.author
+                    print("after time")
+                    if authors is not None and author not in authors:
+                        continue
                     
-                    author = self.authors.get(author.name)
-
-                    author.commits.add(repo + commit.hash)
-
-                    if repo not in author.repos:
-                        author.repos.add(repo)
-                    
-                    for mod in commit.modifications:
-                        mod._calculate_metrics()
-                        if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
-                            continue
+                    if True:    #for now, not worried about commit type
+                        if author.name not in self.authors:
+                            self.authors.update({author.name:gitAuthor(author)})
+                            #print("Found new author: "+author.name)
                         
-                        author.files.add(mod.new_path)
-                        #parse diff and add lines to list
-                        
-                        newSC = list()
-                        leDiff = repository.parse_diff(mod.diff)
-                        for num, line in leDiff["added"]:
-                            newSC.append(line)
+                        author = self.authors.get(author.name)
 
-                        from lizard import analyze_file as liz
-                        fileInfo = liz.analyze_source_code(mod.new_path, "\n".join(newSC))
+                        author.commits.add(repo + commit.hash)
 
-                        #maintain list of dicts containing the source code of specific functions. Same format as for lines
-                        lineIndex = 0
+                        if repo not in author.repos:
+                            author.repos.add(repo)
                         
-                        for fun in fileInfo.function_list:
-                            #Make sure these appear in the "function"
-                            arg_list_termination = r"\)\s*{"
-                            started = False
-                            newFun = dict()
-                            lineStr = ""
-                            try:
-                                while(leDiff["added"][lineIndex][0]<fun.start_line):
-                                    lineIndex+=1
+                        for mod in commit.modifications:
+                            mod._calculate_metrics()
+                            if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
+                                continue
                             
-                                while(leDiff["added"][lineIndex][0]<fun.end_line+1):
-                                    last_lineStr = lineStr
-                                    lineStr = leDiff["added"][lineIndex][1]
-                                    
-                                    if not started and re.search(arg_list_termination, "".join([lineStr,last_lineStr])):
-                                        started = True
-                                        
-                                    newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):lineStr})
-                                    lineIndex+=1
-                            except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
-                                pass
+                            author.files.add(mod.new_path)
+                            #parse diff and add lines to list
+                            
+                            newSC = list()
+                            leDiff = repository.parse_diff(mod.diff)
+                            for num, line in leDiff["added"]:
+                                newSC.append(line)
 
-                            if started and len(newFun) > 1 and '}' in lineStr + last_lineStr:
-                                author.lines.update(newFun)
-                                author.functions.append(self.functionToString(newFun)) 
+                            from lizard import analyze_file as liz
+                            fileInfo = liz.analyze_source_code(mod.new_path, "\n".join(newSC))
+
+                            #maintain list of dicts containing the source code of specific functions. Same format as for lines
+                            lineIndex = 0
+                            
+                            for fun in fileInfo.function_list:
+                                #Make sure these appear in the "function"
+                                arg_list_termination = r"\)\s*{"
+                                started = False
+                                newFun = dict()
+                                lineStr = ""
+                                try:
+                                    while(leDiff["added"][lineIndex][0]<fun.start_line):
+                                        lineIndex+=1
                                 
+                                    while(leDiff["added"][lineIndex][0]<fun.end_line+1):
+                                        last_lineStr = lineStr
+                                        lineStr = leDiff["added"][lineIndex][1]
+                                        
+                                        if not started and re.search(arg_list_termination, "".join([lineStr,last_lineStr])):
+                                            started = True
+                                            
+                                        newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):lineStr})
+                                        lineIndex+=1
+                                except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
+                                    pass
+
+                                if started and len(newFun) > 1 and '}' in lineStr + last_lineStr:
+                                    author.lines.update(newFun)
+                                    author.functions.append(self.functionToString(newFun)) 
+            except Exception:
+                traceback.print_exc()                   
    
             print(str("finished"+str(miner._path_to_repo)))
             print(self)

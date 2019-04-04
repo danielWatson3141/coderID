@@ -1,8 +1,9 @@
 #!/bin/bash
-#SBATCH --array=1-3
-#SBATCH --time=00:05:00
+#SBATCH --array=1-98
+#SBATCH --time=03:00:00
 #SBATCH --account=def-m2nagapp
-#SBATCH --mem-per-cpu=1024 
+#SBATCH --ntasks=4
+#SBATCH --mem-per-cpu=2048 
 #SBATCH --job-name=coderID
 #SBATCH --output=sloutput/%x-%j.out
 
@@ -16,6 +17,8 @@ echo $numToRun
 
 tmp=$SLURM_TMPDIR #this is allocated temp dir
 
+#try renaming localscratch to local for gitpython fix
+		
 iter=1
 
 cp -a ~/ENV $tmp	#copy Python env to make things faster
@@ -26,28 +29,37 @@ cp -a "/home/dj2watso/coderID/" $tmp	#copy over the whole coderID dir to make th
 #tail $tmp/coderID/runAllExperiments.sh
 #ls $tmp
 
-SourceDir="/home/dj2watso/projects/def-m2nagapp/dj2watso/repos"
+SourceDir="/home/dj2watso/projects/def-m2nagapp/dj2watso/coderID/savedSets"
 
 echo "Source dir:"$SourceDir
 
-for dir in $SourceDir/*/
+for dir in $SourceDir/*
 do
+		echo $dir
     if [ "$iter" -eq "$numToRun" ]; then
 
-		base=$(basename $dir)
+			base=$(basename $dir)
 
-		echo "copying "$dir" to "$tmp
+			rundir=$tmp"/"$base 
+			#ls $tmp/coderID
 
-		rundir=$tmp"/"$base 
-		#ls $tmp/coderID
+			echo "running "$base" from "$rundir
+			#tail $tmp/coderID/runAllExperiments.sh
 
-		echo "running "$base" from "$rundir
-		tail $tmp/coderID/runAllExperiments.sh
-		$tmp/coderID/runAllExperiments.sh $rundir "$base" #run experiments, hopefully all from tmp
+			oldWD=$PWD
 
-		cp $tmp/coderID/classResults/* classResults/	#copy the results back over
-		cp $tmp/coderID/plots/* plots/
-		cp $tmp/coderID/savedSets/* savedSets/
+			cd $tmp/coderID
+
+			echo "now in "$PWD
+			ls ../
+
+			./runAllExperiments.sh "$base" "$base" #run experiments, hopefully all from tmp
+
+			cp classResults/* $oldWD/classResults/	#copy the results back over
+			cp plots/* $oldWD/plots/
+			cp savedSets/* $oldWD/savedSets/
+
+			cd $oldWD
 		
     fi
     let "iter++"
