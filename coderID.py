@@ -664,7 +664,7 @@ class MyPrompt(Cmd):
             #make feature report
             for name in selectedTermCounts.keys():
                 row = [name, self.activegps.featureTypes[name], selectedTermCounts[name], featureImportances[name]]
-                print(row)
+                #print(row)
                 w.writerow(row)
 
 
