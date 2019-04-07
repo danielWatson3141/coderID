@@ -66,7 +66,7 @@ class gitProfileSet:
             print("Scanning repo: "+miner._path_to_repo)
                         
 
-            for commit in (miner.traverse_commits()):
+            for commit in tqdm(miner.traverse_commits()):
                 author = commit.author
                 
                 if authors is not None and author not in authors:
@@ -129,7 +129,7 @@ class gitProfileSet:
                                 author.lines.update(newFun)
                                 author.functions.append(self.functionToString(newFun)) 
                                 
-   
+            self.minedRepos.add(repo)
             print(str("finished"+str(miner._path_to_repo)))
             print(self)
 
@@ -171,7 +171,7 @@ class gitProfileSet:
         print("Gathering char and token level features") # generating tokens/unigrams
         authors_seen = 0
 
-        for author in (self.authors.values()):
+        for author in tqdm(self.authors.values()):
             if numAuthors != -1 and authors_seen == numAuthors:
                     break
             authors_seen += 1

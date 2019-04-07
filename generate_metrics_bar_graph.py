@@ -22,6 +22,8 @@ def get_session_metrics(filepath, experiment):
         session_df = pd.read_csv(readfile)
 
     sessions = list(session_df["session"])
+
+
     report_paths = list(session_df[experiment+"_filepath"])
 
     precisions = []
@@ -60,20 +62,19 @@ def plot_precision_recall_bar_graph(session_names, session_precisions, session_r
     ax.set_xticks(index + bar_width / 2)
     ax.set_xticklabels(range(1, len(session_names)+1))
     ax.legend(loc="lower right")
-    #ax.set_aspect(aspect=.2)
+    ax.tick_params(labelbottom=False)
     plt.show()
-    plt.savefig(experiment+"_prec_recall.png")
-
+    plt.savefig("all_binary_prec_recall.png")
 
 import csv
-def write_prec_recall(session_names, session_precisions, session_recalls, experiment):
+def write_prec_recall(session_names, session_precisions, session_recalls):
     
-    with open(experiment+"_prec_recall.csv", 'w') as writeFile:
+    with open("all_prec_recall.csv", 'w') as writeFile:
         writer = csv.writer(writeFile)
         it = 0
         for name in session_names:
-            writer.writerow([str(session_names[it]), float(session_precisions[it]), float(session_recalls[it])])
-            it+=1
+            writer.writerow([[session_names[it]], [session_precisions[it]], [session_recalls[it]]])
+	    it+=1
 
 
 if __name__ == "__main__":
@@ -83,7 +84,9 @@ if __name__ == "__main__":
         exit(1)
 
     session_file = sys.argv[1]
+
     for experiment in ["binary", "multi", "single_model_multi"]:
         session_names, precisions, recalls = get_session_metrics(session_file, experiment)
         plot_precision_recall_bar_graph(session_names, precisions, recalls, experiment)
         write_prec_recall(session_names, precisions, recalls, experiment)
+

@@ -66,11 +66,11 @@ def plot_author_roc_auc_curve(author, fpr, tpr, roc_auc, color='darkorange', dir
     lw = 2
     plt.plot(
         fpr, tpr, color=color, lw=lw,
-        label='ROC curve (area = %0.2f)' % roc_auc
+        label='ROC curve (area = %0.4f)' % roc_auc
     )
     plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
     plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
+    plt.ylim([0.0, 1.0])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.title('ROC Curve for {}'.format(author))
@@ -85,19 +85,19 @@ def plot_average_roc_auc_curve(roc_averages):
     # Plot macro average ROC
     plt.plot(
         roc_averages["unweighted"]["fpr"], roc_averages["unweighted"]["tpr"], color="deeppink", lw=lw,
-        label="macro average ROC curve (area = {0:0.1f})".format(roc_averages["unweighted"]["AUC"]),
+        label="macro average ROC curve (area = {%0.4f})".format(roc_averages["unweighted"]["AUC"]),
         linestyle=":",
     )
     # Plot weighted average ROC
     plt.plot(
         roc_averages["weighted"]["fpr"], roc_averages["weighted"]["tpr"], color="teal", lw=lw,
-        label="weighted average ROC curve (area = {0:0.1f})".format(roc_averages["weighted"]["AUC"]),
+        label="weighted average ROC curve (area = {%0.4f})".format(roc_averages["weighted"]["AUC"]),
         linestyle=":",
     )
     ## Plot micro average ROC
     plt.plot(
         roc_averages["micro"]["fpr"], roc_averages["micro"]["tpr"], color="green", lw=lw,
-        label="micro average ROC curve (area = {0:0.1f})".format(roc_averages["micro"]["AUC"]),
+        label="micro average ROC curve (area = {%0.4f})".format(roc_averages["micro"]["AUC"]),
         linestyle=":",
     )
 
@@ -118,7 +118,7 @@ def plot_roc_auc_curves(results, directory="plots", session_name=""):
     plot_average_roc_auc_curve(roc_averages)
     plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
     plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
+    plt.ylim([0.0, 1.0])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.title('All ROC Curves for {}'.format(session_name))
@@ -134,7 +134,7 @@ def plot_roc_auc_curves(results, directory="plots", session_name=""):
     for i, (author, metrics) in enumerate(results.items()):
         plt.plot(
             metrics["fpr"], metrics["tpr"], color=get_color(i), lw=lw,
-            label="ROC curve for {0:s} (area = {1:0.1f})".format(author, metrics[author]["AUC"]),
+            label="ROC curve for {0:s} (area = {0:0.4f})".format(author, metrics[author]["AUC"]),
         )
     plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
     plt.xlim([0.0, 1.0])

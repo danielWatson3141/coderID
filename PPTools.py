@@ -189,6 +189,8 @@ class Tokenize:
 
     @staticmethod
     def get_tu(fn_str):
+        idx = None
+
         try:
             idx = cindex.Index.create()
         except:
