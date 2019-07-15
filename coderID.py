@@ -75,6 +75,8 @@ class MyPrompt(Cmd):
         self.activegps = gitProfileSet.gitProfileSet("default")
 
         self.prompt = self.activegps.name+">"
+
+        self.config = PPTools.Config.config
         
         #print("Current set: "+self.activegps.name)
 
@@ -457,7 +459,7 @@ class MyPrompt(Cmd):
             self.do_save()
 
         print("Generating Class Report")
-        splits = int(PPTools.Config.config["Cross Validation"]["n_splits"])
+        splits = int(self.config["Cross Validation"]["n_splits"])
         cv = StratifiedKFold(n_splits=splits, shuffle=True)
         pred = []
         tar = []
@@ -924,12 +926,12 @@ class MyPrompt(Cmd):
         """Limit to N authors with between k and m functions. 0 for unlimited"""
         args = args.split(" ")
         if len(args) != 3:
-            print("Requires 3 args")
-            return
+            print("Requires 3 args for custom. Doing default set in config.ini.")
+            n= int(args[0])
+            k= int(args[1])
+            m= int(args[2])
+        else:
 
-        n= int(args[0])
-        k= int(args[1])
-        m= int(args[2])
         
         print("Pruning Authors")
         old = self.activegps.authors
