@@ -1,11 +1,10 @@
 from scipy.sparse import csr_matrix
 import re
-import copy
 import numpy as np
 import collections
 import os.path
 import PPTools
-
+import ast
 import warnings
 warnings.filterwarnings("error", category=RuntimeWarning)
 
@@ -19,6 +18,7 @@ class featureExtractors:
                         "avg_line_len", "std_line_len", "whitespace_ratio",
                         "new_line_open_brace", "tab_lead_lines"]
 
+    # Todo: Use config here instead
     keywords = sorted(['do', 'if', 'else', 'switch', 'for', 'while'])
     tokfeatureNames = ["num_" + word for word in keywords] + \
                       ["num_keywords", "num_tokens", "num_literals",
@@ -46,7 +46,7 @@ class featureExtractors:
             raise ValueError(msg)
 
     @staticmethod
-    def characterLevel(function):
+    def characterLevel(function:str):
         """ returns row vector in scipy.sparse.csr_matrix row format of features extracted from function string"""
         nfeatures = len(featureExtractors.charfeatureNames)
         features = np.zeros((nfeatures,), dtype=float)
@@ -221,115 +221,5 @@ class featureExtractors:
         return csr_matrix(features, shape = (1, nfeatures))
 
     @staticmethod
-    def astLevel(ast):
-        """ Returns row vector scipy.sparse.csr_matrix of features extracted from ast"""
-        return csr_matrix(0, shape = (1, 1))    #singleton 0 as default
-
-"""
-if __name__ == "__main__":
-    tst = #include <ctype.h>
-    #include <errno.h>
-    
-    static ssize_t get_cpu_usages(thermal_module_t *module, cpu_usage_t *list) {
-    int vals, cpu_num, online;
-    ssize_t read;
-    uint64_t user, nice, system, idle, active, total;
-    char *line = NULL;
-    size_t len = 0;
-    size_t size = 0;
-    char file_name[MAX_LENGTH]; // test
-    FILE *file;
-    FILE *cpu_file;
-    if (list == NULL) {
-        return CPU_NUM;
-    }
-    file = fopen(CPU_USAGE_FILE, "r");
-    if (file == NULL) {
-        ALOGE("%s: failed to open: %s", __func__, strerror(errno));
-        return -errno;
-    }
-    while ((read = getline(&line, &len, file)) != -1) {
-        // Skip non "cpu[0-9]" lines.
-        if (strnlen(line, read) < 4 || strncmp(line, "cpu", 3) != 0 || !isdigit(line[3])) {
-            free(line);
-            line = NULL;
-            len = 0;
-            continue;
-        }
-        vals = sscanf(line, "cpu%d %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64, &cpu_num, &user,
-                &nice, &system, &idle);
-        free(line);
-        line = NULL;
-        len = 0;
-        
-        /*
-        test 2
-        */
-        
-        test = does_this_work ? 'yes' : 'no'
-        
-        if (vals != 5 || size == CPU_NUM) {
-            if (vals != 5) {
-                ALOGE("%s: failed to read CPU information from file: %s", __func__,
-                        strerror(errno));
-            } else {
-                ALOGE("/proc/stat file has incorrect format.");
-            }
-            fclose(file);
-            return errno ? -errno : -EIO;
-        }
-        
-        active = user + nice + system;
-        total = active + idle;
-        // Read online CPU information.
-        snprintf(file_name, MAX_LENGTH, CPU_ONLINE_FILE_FORMAT, cpu_num);
-        cpu_file = fopen(file_name, "r");
-        online = 0;
-        if (cpu_file == NULL) {
-            ALOGE("%s: failed to open file: %s (%s)", __func__, file_name, strerror(errno));
-            fclose(file);
-            return -errno;
-        }
-        if (1 != fscanf(cpu_file, "%d", &online)) {
-            ALOGE("%s: failed to read CPU online information from file: %s (%s)", __func__,
-                    file_name, strerror(errno));
-            fclose(file);
-            fclose(cpu_file);
-            return errno ? -errno : -EIO;
-        }
-        fclose(cpu_file);
-        list[size] = (cpu_usage_t) {
-            .name = CPU_LABEL[size],
-            .active = active,
-            .total = total,
-            .is_online = online
-        };
-        size++;
-    }
-    fclose(file);
-    if (size != CPU_NUM) {
-        ALOGE("/proc/stat file has incorrect format.");
-        return -EIO;
-    }
-    return size;
-}
-    print(featureExtractors.charfeatureNames)
-    print(featureExtractors.characterLevel(tst))
-    filename = os.getcwd() + "/test.cpp"
-    #tokens = PPTools.Tokenize.cpp(filename)
-    #print(featureExtractors.tokfeatureNames)
-    #print(featureExtractors.tokenLevel(tokens))
-    tu = PPTools.Tokenize.cpp(filename)
-"""
-
-"""
-class AST:
-    def __init__(self, cursor):
-        self.cur = cursor # top-level node
-        self.depth = 0
-        # use dict to store counts of cursor types for now
-        # TODO: extend this to store counts for distinct sub-paths
-        # Construct an element of the corpus of the node types by traversing the tree and the
-        #   storing the type of each node in a vector
-        #
-"""
+    def astLevel(fn_str):
+        pass

@@ -1,0 +1,33 @@
+{
+  "Declarator": {
+    "Decl-Specifier": [
+      "friend",
+      "typedef",
+      "auto",
+      "register",
+      "static",
+      "extern",
+      "inline",
+      "virtual"
+      ]
+
+  },
+  "Type-Specifier": {
+    "Simple-Type": [
+        "char",
+        "char16_t",
+        "char32_t",
+        "wchar_t",
+        "signed",
+        "unsigned",
+        "int",
+        "short",
+        "long",
+        "float",
+        "double",
+        "bool",
+        "void"
+    ]
+  }
+
+}
