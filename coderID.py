@@ -24,7 +24,7 @@ from sklearn.model_selection import cross_val_score,ShuffleSplit, StratifiedKFol
 from sklearn import metrics, utils
 from sklearn.metrics import classification_report
 
-from plotting import plot_roc_auc_curves, plot_function_length_histogram
+from plotting import plot_roc_auc_curves, plot_function_length_histogram, plot_confusion_matrix
 
 
 from tqdm import tqdm
@@ -262,8 +262,9 @@ class MyPrompt(Cmd):
         features = self.activegps.counts
         targets = self.activegps.target
         names = self.activegps.terms
+        count=1
         for train, test in cv.split(features, targets):
-
+            print("fold "+str(count)+" out of "+str(splits))
             trFeatures = features[train]
             trTarget = targets[train]   #grab the training set...
 
@@ -293,10 +294,12 @@ class MyPrompt(Cmd):
 
             tar.extend(teTarget)
 
+        plot_confusion_matrix(tar, pred, authorNames) 
         
         print(classification_report(pred, tar, output_dict=False))
         report = classification_report(pred, tar, output_dict=True)
          
+        authorNames = []
         with open(self.resultLocation+expName+"_multi_report.csv", 'w+') as reportFile:
             w = csv.writer(reportFile)
             oneReport = list(report.items())[0]     
@@ -307,9 +310,15 @@ class MyPrompt(Cmd):
             w.writerow(header)
             #make classification report
             for authorName, result in report.items():
+                authorNames.append(authorName)
                 row = [authorName]+[value for key, value in result.items()]
                 print(row)
                 w.writerow(row)
+        
+        
+
+        
+
 
         
     def binaryify(self, outputs, author):
@@ -461,6 +470,7 @@ class MyPrompt(Cmd):
 
         results = dict()
         for authorName in (self.activegps.authors.keys()):
+            print(authorName)
             results.update(
                 {authorName:
                     self.twoClassTest(authorName, dictOutput=True)
@@ -563,6 +573,7 @@ class MyPrompt(Cmd):
                 conf.extend([prob[1] for prob in clf.predict_proba(teFeatures)])
 
         imp = np.divide(imp,splits)
+
 
         from sklearn.metrics import auc, roc_curve  #AUC computation
 
