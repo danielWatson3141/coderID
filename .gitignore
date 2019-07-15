@@ -13,3 +13,7 @@
 ghmining*.json
 allExperiments.cid
 *.vscode*
+*.png
+*.out
+*.odc
+settings.json
