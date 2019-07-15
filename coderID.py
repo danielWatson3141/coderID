@@ -609,7 +609,7 @@ class MyPrompt(Cmd):
         clf = Classifier.Classifier().model
         
         #cross validate for prec and rec
-        splits = int(PPTools.Config.config["Cross Validation"]["n_splits"])
+        splits = int(self.config["Cross Validation"]["n_splits"])
        
         cv = StratifiedKFold(n_splits=splits, shuffle=True)
         pred = []
@@ -691,7 +691,7 @@ class MyPrompt(Cmd):
         authorCount = len(authorInd)
         notAuthorCount = len(notAuthorInd)
 
-        test_ratio = float(PPTools.Config.config['Cross Validation']['test_ratio'])
+        test_ratio = float(self.config['Cross Validation']['test_ratio'])
 
         if authorCount / notAuthorCount < test_ratio:  #if author makes up less than test_ratio of the sample, reduce the sample size
             maxNotAuthorAllowed = int((1 / test_ratio) * authorCount)
@@ -714,8 +714,8 @@ class MyPrompt(Cmd):
         nFeatures = features.shape[1]
 
         #reduce sample size to decrease training time
-        maxSamples = int(PPTools.Config.config["Feature Selection"]["max_samples"])
-        reductionFactor = float(PPTools.Config.config["Feature Selection"]["reduction_factor"])
+        maxSamples = int(self.config["Feature Selection"]["max_samples"])
+        reductionFactor = float(self.config["Feature Selection"]["reduction_factor"])
         if len(targets) > maxSamples:
             from random import sample
             samples = sample(range(0,len(targets)), maxSamples)
@@ -823,7 +823,7 @@ class MyPrompt(Cmd):
             self.do_save()
 
         print("Generating Class Report")
-        splits = int(PPTools.Config.config["Cross Validation"]["n_splits"])
+        splits = int(self.config["Cross Validation"]["n_splits"])
         cv = StratifiedKFold(n_splits=splits, shuffle=True)
         pred = []
         tar = []
