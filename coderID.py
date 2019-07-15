@@ -272,7 +272,7 @@ class MyPrompt(Cmd):
             teTarget = targets[test]    #...and the test set.
 
             conf = dict()
-            for author in (self.activegps.authors.keys()):
+            for author in tqdm(self.activegps.authors.keys()):
                 clf = Classifier.Classifier().model
                 auth_trFeatures = self.reFeSe(clf, trFeatures, trTarget)    #feature select for the athor
                 clf = self.train_binary(trFeatures[:,auth_trFeatures], trTarget, author)
@@ -294,7 +294,7 @@ class MyPrompt(Cmd):
 
             tar.extend(teTarget)
 
-        plot_confusion_matrix(tar, pred, authorNames) 
+        plot_confusion_matrix(tar, pred, self.activegps.authors.keys()) 
         
         print(classification_report(pred, tar, output_dict=False))
         report = classification_report(pred, tar, output_dict=True)
@@ -315,143 +315,7 @@ class MyPrompt(Cmd):
                 print(row)
                 w.writerow(row)
         
-        
-
-        
-
-
-        
-    def binaryify(self, outputs, author):
-        targets = []
-        authorInd = []
-        notAuthorInd = []
-        for i in range(0,len(outputs)):  #find indeces containing examples from author in question
-            authorName = outputs[i]
-            if authorName == author:
-                targets.append(author)
-                authorInd.append(i)
-            else:
-                targets.append("not_"+author)
-                notAuthorInd.append(i)
-
-        return (np.array(targets), authorInd, notAuthorInd)
-
-    def train_binary(self, features, outputs, author):
-        
-        targets, authorInd, notAuthorInd = self.binaryify(outputs, author)
-
-        authorCount = len(authorInd)
-        notAuthorCount = len(notAuthorInd)
-
-        test_ratio = float(PPTools.Config.config['Cross Validation']['test_ratio'])
-
-        if authorCount / notAuthorCount < test_ratio:  #if author makes up less than test_ratio of the sample, reduce the sample size
-            maxNotAuthorAllowed = int((1 / test_ratio) * authorCount)
-            from random import sample
-            notAuthorInd = sample(notAuthorInd, maxNotAuthorAllowed)
-            features = features[authorInd+notAuthorInd]
-            targets = [targets[i] for i in authorInd+notAuthorInd]
-        
-        targets = np.array(targets)
-
-        clf = Classifier.Classifier().model
-        
-        #cross validate for prec and rec
-        clf.fit(features, targets)   #train the model
-        return clf #return the model
-
-    def reFeSe(self, model, features, targets):
-         #returns indeces of best features
-
-        nFeatures = features.shape[1]
-
-        #reduce sample size to decrease training time
-        maxSamples = int(PPTools.Config.config["Feature Selection"]["max_samples"])
-        reductionFactor = float(PPTools.Config.config["Feature Selection"]["reduction_factor"])
-        if len(targets) > maxSamples:
-            from random import sample
-            samples = sample(range(0,len(targets)), maxSamples)
-            features = features[samples,:]
-            targets = targets[samples]
-
-        featureSubset = features
-        previous = 0
-        strength = .01
-        previousBest = range(0, features.shape[1])
-        best = None
-        once = True #run at least once
-        #choose optimal feature set size
-        while True:
-            previous = strength
-            
-            strength, importances = self.evaluate(model, featureSubset, targets)
-            #print((nFeatures, strength))
-            if strength < previous and not once:
-                break
-            if once:
-                once = False
-            from operator import itemgetter
-            match = list(zip(previousBest, importances))
-
-            nonZero = np.where([m[1] > 0 for m in match])[0]
-            nzero = (nFeatures) - len(nonZero)
-
-            match = [match[i] for i in nonZero]
-            
-            if best is not None:
-                    previousBest = best
-
-            if nzero > reductionFactor*nFeatures: #get rid of all 0 importance features
-                nFeatures = nFeatures - nzero
-                best = [m[0] for m in match]
-                featureSubset = features[:,best]
-                #do at least once more
-                once = True
-            else:   #if there are not many, sort and keep the top non-zero ones
-                nFeatures = int((1-reductionFactor)*nFeatures)-nzero
-                best = list(heapq.nlargest(nFeatures, match, key = itemgetter(1)))
-                best = [b[0] for b in best]
-                featureSubset = features[:,best]
-        
-        return previousBest
-        
-
-    def evaluate(self, clf, features, targets):
-        from sklearn.model_selection import cross_val_score, ShuffleSplit
-        numSamples = features.shape[0]
-        section = 'Cross Validation'
-
-        splits = PPTools.Config.get_value(section, 'n_splits')
-        trSize = int(min(PPTools.Config.get_value(section, 'train_min'),
-                         numSamples * PPTools.Config.get_value(section, 'train_ratio')))
-        teSize = int(min(PPTools.Config.get_value(section, 'test_min'),
-                         numSamples * PPTools.Config.get_value(section, 'test_ratio')))
-        featureCount = features.shape[1]
-        cv = ShuffleSplit(n_splits=splits, train_size=trSize, test_size=teSize)
-        
-        
-        importances = np.zeros(featureCount)
-        strength = 0
-        for train, test in cv.split(features, targets):
-
-            trFeatures = features[train]
-            trTarget = targets[train]
-
-            teFeatures = features[test]
-            teTarget = targets[test]
-   
-            clf.fit(trFeatures, trTarget)
-
-            predictions = clf.predict(teFeatures)
-
-            stren = len(np.where(predictions == teTarget)[0])/teSize
-
-            strength += stren / splits
-            importances += clf.feature_importances_ / splits
-            
-        return (strength, importances)
-
-
+    
     def do_twoClassTest(self, args):
         """Builds and evaluates a Random Forest classifier over each author in a 1vAll manner and write results to a file."""
 
@@ -590,6 +454,143 @@ class MyPrompt(Cmd):
         report["predictions"] = conf
 
         return report
+
+        
+
+        
+
+
+        
+    def binaryify(self, outputs, author):
+        targets = []
+        authorInd = []
+        notAuthorInd = []
+        for i in range(0,len(outputs)):  #find indeces containing examples from author in question
+            authorName = outputs[i]
+            if authorName == author:
+                targets.append(author)
+                authorInd.append(i)
+            else:
+                targets.append("not_"+author)
+                notAuthorInd.append(i)
+
+        return (np.array(targets), authorInd, notAuthorInd)
+
+    def train_binary(self, features, outputs, author):
+        
+        targets, authorInd, notAuthorInd = self.binaryify(outputs, author)
+
+        authorCount = len(authorInd)
+        notAuthorCount = len(notAuthorInd)
+
+        test_ratio = float(PPTools.Config.config['Cross Validation']['test_ratio'])
+
+        if authorCount / notAuthorCount < test_ratio:  #if author makes up less than test_ratio of the sample, reduce the sample size
+            maxNotAuthorAllowed = int((1 / test_ratio) * authorCount)
+            from random import sample
+            notAuthorInd = sample(notAuthorInd, maxNotAuthorAllowed)
+            features = features[authorInd+notAuthorInd]
+            targets = [targets[i] for i in authorInd+notAuthorInd]
+        
+        targets = np.array(targets)
+
+        clf = Classifier.Classifier().model
+        
+        #cross validate for prec and rec
+        clf.fit(features, targets)   #train the model
+        return clf #return the model
+
+    def reFeSe(self, model, features, targets):
+         #returns indeces of best features
+
+        nFeatures = features.shape[1]
+
+        #reduce sample size to decrease training time
+        maxSamples = int(PPTools.Config.config["Feature Selection"]["max_samples"])
+        reductionFactor = float(PPTools.Config.config["Feature Selection"]["reduction_factor"])
+        if len(targets) > maxSamples:
+            from random import sample
+            samples = sample(range(0,len(targets)), maxSamples)
+            features = features[samples,:]
+            targets = targets[samples]
+
+        featureSubset = features
+        previous = 0
+        strength = .01
+        previousBest = range(0, features.shape[1])
+        best = None
+        once = True #run at least once
+        #choose optimal feature set size
+        while True:
+            previous = strength
+            
+            strength, importances = self.evaluate(model, featureSubset, targets)
+            #print((nFeatures, strength))
+            if strength < previous and not once:
+                break
+            if once:
+                once = False
+            from operator import itemgetter
+            match = list(zip(previousBest, importances))
+
+            nonZero = np.where([m[1] > 0 for m in match])[0]
+            nzero = (nFeatures) - len(nonZero)
+
+            match = [match[i] for i in nonZero]
+            
+            if best is not None:
+                    previousBest = best
+
+            if nzero > reductionFactor*nFeatures: #get rid of all 0 importance features
+                nFeatures = nFeatures - nzero
+                best = [m[0] for m in match]
+                featureSubset = features[:,best]
+                #do at least once more
+                once = True
+            else:   #if there are not many, sort and keep the top non-zero ones
+                nFeatures = int((1-reductionFactor)*nFeatures)-nzero
+                best = list(heapq.nlargest(nFeatures, match, key = itemgetter(1)))
+                best = [b[0] for b in best]
+                featureSubset = features[:,best]
+        
+        return previousBest
+        
+
+    def evaluate(self, clf, features, targets):
+        from sklearn.model_selection import cross_val_score, ShuffleSplit
+        numSamples = features.shape[0]
+        section = 'Cross Validation'
+
+        splits = PPTools.Config.get_value(section, 'n_splits')
+        trSize = int(min(PPTools.Config.get_value(section, 'train_min'),
+                         numSamples * PPTools.Config.get_value(section, 'train_ratio')))
+        teSize = int(min(PPTools.Config.get_value(section, 'test_min'),
+                         numSamples * PPTools.Config.get_value(section, 'test_ratio')))
+        featureCount = features.shape[1]
+        cv = ShuffleSplit(n_splits=splits, train_size=trSize, test_size=teSize)
+        
+        
+        importances = np.zeros(featureCount)
+        strength = 0
+        for train, test in cv.split(features, targets):
+
+            trFeatures = features[train]
+            trTarget = targets[train]
+
+            teFeatures = features[test]
+            teTarget = targets[test]
+   
+            clf.fit(trFeatures, trTarget)
+
+            predictions = clf.predict(teFeatures)
+
+            stren = len(np.where(predictions == teTarget)[0])/teSize
+
+            strength += stren / splits
+            importances += clf.feature_importances_ / splits
+            
+        return (strength, importances)
+
 
     def do_featureDetect(self, args):
         """Perform feature selection operations. 
