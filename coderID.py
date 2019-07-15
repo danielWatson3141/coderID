@@ -69,10 +69,9 @@ class MyPrompt(Cmd):
 
         for gps in self.gpsList:
             self.do_load(gps)
-            return
             break #just do it once. Hack around getting a single arbitrary element from set
         
-        self.activegps = gitProfileSet.gitProfileSet("default")
+        #self.activegps = gitProfileSet.gitProfileSet("default")
 
         self.prompt = self.activegps.name+">"
 
@@ -172,7 +171,7 @@ class MyPrompt(Cmd):
 
     def do_ls(self, args):
         """List all available profile sets"""
-        for gpsFile in self.gpsList:
+        for gpsFile in sorted(self.gpsList):
             if self.activegps.name == gpsFile:
                 print(gpsFile+"*")
             else:
@@ -189,7 +188,7 @@ class MyPrompt(Cmd):
             if args == "*":
                 os.remove(self.saveLocation+gpsFile)
 
-    def do_collect_gcj(self, args):
+    def do_mineGcj(self, args):
         """gathers info from extracted gcj directory. Pulls everything. Use zipSearch for partial extraction or extract full gcj.zip. Overwrites existing set"""
         currentDir = args.strip()
 
@@ -199,26 +198,14 @@ class MyPrompt(Cmd):
         except Exception:
             print("Failed. target should be superdirectory of one ../gcj/.. directory")
 
-    def do_loadZip(self, args):
-        """loads the specified zip file into memory. Should be ../gcj.zip"""
-        if args == "":
-            zip = "c:/swAuthors/gcj.zip"
-        else:
-            zip = args
-        print("Loading Zip...")
-        try:
-            self.zfile = zipfile.ZipFile(zip)
-        except Exception:
-            print("File could not be located. Check the path.")
-        print(zip+" loaded.")
-
     def do_zipSearch(self, args):
         """Gets n authors from a code jam zip file with more than K documents of type cpp and unzips them to the specified directory"""
        
         if args == "":
-            to = "C:/swAuthors/extractionTest"
-            n = 10
-            K = 10
+            fro = "gcj.zip"
+            to = "gcjExtractedFiles/"
+            n = int(self.config["CodeJam"]["max_authors"])
+            K = int(self.config["CodeJam"]["min_files"])
         else:
             try:
                 args = args.split(" ")       
@@ -237,6 +224,13 @@ class MyPrompt(Cmd):
         if not os.path.exists(to):
             os.makedirs(to)
 
+        print("Loading Zip...")
+        try:
+            self.zfile = zipfile.ZipFile(fro)
+        except Exception:
+            print("File could not be located. Check the path.")
+        print(fro+" loaded.")
+
         
         extension = "cpp"
                 
@@ -246,10 +240,7 @@ class MyPrompt(Cmd):
         authorsToExtract = []
         filesToExtract = []
         #itemCount = len(infoList)
-        
         for index in tqdm(range(0,len(infoList))):
-            
-            
             item = infoList[index]
             
             dirs = item.filename.split("/")
@@ -928,19 +919,18 @@ class MyPrompt(Cmd):
         n=0
         k=0
         m=0
-        if len(args) != 3:
-            print("Requires 3 args for custom. Doing default set in config.ini.")
+        if len(args) == 3:
             n= int(args[0])
             k= int(args[1])
             m= int(args[2])
         else:
-            n = config["Pruning"]["max_authors"]
-            k = config["Pruning"]["min_functions"]
-            m = config["Pruning"]["max_functions"]
+            print("Requires 3 args for custom. Doing default set in config.ini.")
+            n = int(self.config["Pruning"]["max_authors"])
+            k = int(self.config["Pruning"]["min_functions"])
+            m = int(self.config["Pruning"]["max_functions"])
 
         print("Pruning Authors")
         old = self.activegps.authors
-
         new = dict()
         count = 0
         for item in (old.items()):
@@ -1188,9 +1178,9 @@ class MyPrompt(Cmd):
         if not os.path.exists(destination):
             os.mkdir(destination)
         import git
-        #print("cloning "+targetRepoURL)
+        print("cloning "+targetRepoURL)
         result = git.Git(destination).clone(targetRepoURL)
-        result
+        #result
     
         #import traceback
         #traceback.print_exception(e)

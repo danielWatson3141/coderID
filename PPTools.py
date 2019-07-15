@@ -22,7 +22,12 @@ def is_number(s):
     except (TypeError, ValueError):
         pass
 
-    return False    
+    return False
+
+@staticmethod
+def listdir_fullpath(d):
+    return [os.path.join(d, f) for f in os.listdir(d)]
+
 
 
 class Config:

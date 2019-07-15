@@ -20,24 +20,16 @@ from tqdm import tqdm
 from scipy.sparse import hstack, vstack, csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_selection import mutual_info_classif, SelectKBest
+from ProfileSet import ProfileSet
 
+class gitProfileSet(ProfileSet):
 
-class gitProfileSet:
-
-    #TODO: Make it so re-compiling doesn't break
-    #TODO: Make sibling class of ProfileSet
-    
     langList =["cpp", "c"]
     def __init__(self, name):
         """Initialize a new gitset"""
-        self.name = name
+        super(gitProfileSet, self).__init__(name)
         self.repos = []
-        self.authors = dict()
-        self.featuresDetected = False
-        self.featuresSelected = None
-        self.termsSelected = None
         self.minedRepos = set()
-        self.featureTypes = dict()
 
     def addRepo(self, args):
         print("Adding repo: "+args)
@@ -59,8 +51,8 @@ class gitProfileSet:
                 continue
             elif authors is not None:
                 self.minedRepos.add(repo)
-            if not os.path.exists(repo+".git"):
-                repo = os.listdir(repo)[0]
+            #if not os.path.exists(repo+".git"):
+            #    repo = os.listdir(repo)[0]
             miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
             repository = pydriller.GitRepository(repo)
             print("Scanning repo: "+miner._path_to_repo)
@@ -316,6 +308,9 @@ class gitProfileSet:
     
     def __str__(self):
          return (str(len(self.authors))+" authors. "+str(sum(map(lambda x: len(x.functions), self.authors.values())))+" functions in total.")
+    
+    def __lt__(self, other):
+        return  self.name.lower() < other.name.lower()
 
         
 class gitAuthor:

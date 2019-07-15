@@ -17,3 +17,4 @@ allExperiments.cid
 *.out
 *.odc
 settings.json
+*gcjExtractedFiles*
