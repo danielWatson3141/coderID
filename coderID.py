@@ -470,6 +470,7 @@ class MyPrompt(Cmd):
         count=1
         for train, test in cv.split(features, targets):
             print("fold "+str(count)+" out of "+str(splits))
+            count+=1
             trFeatures = features[train]
             trTarget = targets[train]   #grab the training set...
 
