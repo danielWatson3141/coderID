@@ -925,14 +925,19 @@ class MyPrompt(Cmd):
     def do_pruneGit(self, args):
         """Limit to N authors with between k and m functions. 0 for unlimited"""
         args = args.split(" ")
+        n=0
+        k=0
+        m=0
         if len(args) != 3:
             print("Requires 3 args for custom. Doing default set in config.ini.")
             n= int(args[0])
             k= int(args[1])
             m= int(args[2])
         else:
+            n = config["Pruning"]["max_authors"]
+            k = config["Pruning"]["min_functions"]
+            m = config["Pruning"]["max_functions"]
 
-        
         print("Pruning Authors")
         old = self.activegps.authors
 

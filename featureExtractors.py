@@ -157,8 +157,11 @@ class featureExtractors:
             features[n_kwords + 2] += [0, 1][kind == 'TokenKind.KEYWORD']
             # number of keywords
             features[n_kwords] += [0, 1][kind == 'TokenKind.LITERAL']
-
-            tok = token.spelling
+  
+            try:
+                tok = token.spelling
+            except UnicodeDecodeError as error:
+                tok = "unicode_error_token"
 
             #print("{}".format(token))
             if tok in featureExtractors.keywords:
