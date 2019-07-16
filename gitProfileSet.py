@@ -22,15 +22,22 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_selection import mutual_info_classif, SelectKBest
 from ProfileSet import ProfileSet
 
-class gitProfileSet(ProfileSet):
+class gitProfileSet:
 
+    #TODO: Make it so re-compiling doesn't break
+    #TODO: Make sibling class of ProfileSet
+    
     langList =["cpp", "c"]
     def __init__(self, name):
         """Initialize a new gitset"""
-        super(gitProfileSet, self).__init__(name)
+        self.name = name
         self.repos = []
+        self.authors = dict()
+        self.featuresDetected = False
+        self.featuresSelected = None
+        self.termsSelected = None
         self.minedRepos = set()
-
+        
     def addRepo(self, args):
         print("Adding repo: "+args)
         try:
@@ -313,7 +320,7 @@ class gitProfileSet(ProfileSet):
         return  self.name.lower() < other.name.lower()
 
         
-class gitAuthor:
+class gitAuthor(Author):
 
     def __init__(self, dev):
         if dev is not None:
