@@ -32,6 +32,7 @@ import Classifier
 import PPTools
 import heapq
 import traceback
+from codeJamProfileSet import codeJamProfileSet
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score,ShuffleSplit, StratifiedKFold
 from sklearn import metrics, utils
@@ -85,6 +86,9 @@ class MyPrompt(Cmd):
         if args == "":
             print("No name given, initializing to \"default\"")
             self.activegps = gitProfileSet.gitProfileSet("default")
+        elif args == "GCJ":
+            self.activegps = codeJamProfileSet(args)
+            self.gpsList.add(args)
         else:
             self.activegps = gitProfileSet.gitProfileSet(args)
             self.gpsList.add(args)
@@ -188,15 +192,15 @@ class MyPrompt(Cmd):
             if args == "*":
                 os.remove(self.saveLocation+gpsFile)
 
-    def do_mineGcj(self, args):
+    def do_minegcj(self, args):
         """gathers info from extracted gcj directory. Pulls everything. Use zipSearch for partial extraction or extract full gcj.zip. Overwrites existing set"""
         currentDir = args.strip()
+        if type(self.activegps) is not codeJamProfileSet:
+            self.do_new("GCJ")
+        
+        self.activegps.compileAuthors()
+        self.do_save
 
-        try:
-            while not os.path.basename(currentDir) == "gcj":
-                currentDir = currentDir+"/"+os.listdir(currentDir)[0]
-        except Exception:
-            print("Failed. target should be superdirectory of one ../gcj/.. directory")
 
     def do_zipSearch(self, args):
         """Gets n authors from a code jam zip file with more than K documents of type cpp and unzips them to the specified directory"""

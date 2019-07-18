@@ -27,7 +27,7 @@ class gitProfileSet:
     #TODO: Make it so re-compiling doesn't break
     #TODO: Make sibling class of ProfileSet
     
-    langList =["cpp", "c"]
+    langList =["cpp"]
     def __init__(self, name):
         """Initialize a new gitset"""
         self.name = name
@@ -320,7 +320,7 @@ class gitProfileSet:
         return  self.name.lower() < other.name.lower()
 
         
-class gitAuthor(Author):
+class gitAuthor:
 
     def __init__(self, dev):
         if dev is not None:

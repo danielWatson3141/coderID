@@ -21,13 +21,14 @@ from scipy.sparse import hstack, vstack, csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_selection import mutual_info_classif, SelectKBest
 from ProfileSet import ProfileSet
+from pathlib import Path
 
 class codeJamProfileSet:
 
     #TODO: Make it so re-compiling doesn't break
     #TODO: Make sibling class of ProfileSet
     
-    langList =["cpp", "c"]
+    langList =["cpp"]
     def __init__(self, name):
         """Initialize a new gitset"""
         self.name = name
@@ -38,107 +39,67 @@ class codeJamProfileSet:
         self.termsSelected = None
         self.minedRepos = set()
         self.files = set()
-        
-    def addRepo(self, args):
-        print("Adding repo: "+args)
-        try:
-            if args not in self.repos:
-                self.repos.append(args)
-        except Exception:
-            print("Couldn't get that one...")
-        #self.compileAuthors(newRepo)
-    
 
+    #adds all .cpp files in the given GCJ directory
+    def addFiles(self, gcjDir = "gcjExtractedFiles/gcj"):
+        print("Finding Files")
+        for fileName in tqdm(Path(gcjDir).glob("**/*.cpp")):
+            self.files.add(str(fileName))
+            
     
     def compileAuthors(self, authors = None):
         """Mine all repos in the repo list for commits by those in authors. None for get all"""
-        print("mining "+self.name)
-        for repo in self.repos:
-            if not os.path.exists(repo+"/.git"): #in case the repo is one level down
-                repo = os.listdir(repo)[0]
-                print("moved to "+repo)
-            if repo in self.minedRepos:
-                continue
-            elif authors is not None:
-                self.minedRepos.add(repo)
-            #if not os.path.exists(repo+".git"):
-            #    repo = os.listdir(repo)[0]
-            miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
-            repository = pydriller.GitRepository(repo)
-            print("Scanning repo: "+miner._path_to_repo)
-                        
+        
+        if not self.files:
+            self.addFiles()
 
-            for commit in tqdm(miner.traverse_commits()):
-                author = commit.author
-                
-                if authors is not None and author not in authors:
-                    continue
-                
-                if True:    #for now, not worried about commit type
-                    if author.name not in self.authors:
-                        self.authors.update({author.name:gitAuthor(author)})
+        print("Analyzing Files")
+        filesToDiscard = set()
+        for fileName in tqdm(self.files):
+                try:
+                    authorName = fileName.split("/")[-5]
+                    
+                    if authors is not None and authorName not in authors:
+                        continue
+                    
+                    if authorName not in self.authors:
+                        self.authors.update({authorName:Author(authorName)}) #add new author
                         #print("Found new author: "+author.name)
                     
-                    author = self.authors.get(author.name)
+                    author = self.authors.get(authorName)
 
-                    author.commits.add(repo + commit.hash)
-
-                    if repo not in author.repos:
-                        author.repos.add(repo)
+                    if fileName not in author.files:
+                        author.files.add(fileName)
                     
-                    for mod in commit.modifications:
-                        mod._calculate_metrics()
-                        if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
-                            continue
-                        
-                        author.files.add(mod.new_path)
-                        #parse diff and add lines to list
-                        
-                        newSC = list()
-                        leDiff = repository.parse_diff(mod.diff)
-                        for num, line in leDiff["added"]:
-                            newSC.append(line)
+                
+                    import lizard
+                    fileInfo = lizard.analyze_file(fileName)
 
-                        from lizard import analyze_file as liz
-                        fileInfo = liz.analyze_source_code(mod.new_path, "\n".join(newSC))
+                    #maintain list of dicts containing the source code of specific functions. Same format as for lines
+                    lineIndex = 0
+                    
+                    for line in open(fileName).readlines():
+                        author.lines[(fileName, lineIndex)] = line
+                        lineIndex += 1
 
-                        #maintain list of dicts containing the source code of specific functions. Same format as for lines
-                        lineIndex = 0
+
+                    for fun in fileInfo.function_list:
+                        newFun = []            
                         
-                        for fun in fileInfo.function_list:
-                            #Make sure these appear in the "function"
-                            arg_list_termination = r"\)\s*{"
-                            started = False
-                            newFun = dict()
-                            lineStr = ""
-                            try:
-                                while(leDiff["added"][lineIndex][0]<fun.start_line):
-                                    lineIndex+=1
-                            
-                                while(leDiff["added"][lineIndex][0]<fun.end_line+1):
-                                    last_lineStr = lineStr
-                                    lineStr = leDiff["added"][lineIndex][1]
-                                    
-                                    if not started and re.search(arg_list_termination, "".join([lineStr,last_lineStr])):
-                                        started = True
-                                        
-                                    newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):lineStr})
-                                    lineIndex+=1
-                            except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
-                                pass
+                        for lineIndex in range(fun.start_line-1, fun.end_line):
+                            newFun.append(author.lines[(fileName, lineIndex)])
 
-                            if started and len(newFun) > 1 and '}' in lineStr + last_lineStr:
-                                author.lines.update(newFun)
-                                author.functions.append(self.functionToString(newFun)) 
-                                
-            self.minedRepos.add(repo)
-            print(str("finished"+str(miner._path_to_repo)))
-            print(self)
+                        author.functions.append("".join(newFun))
+                except Exception:
+                    filesToDiscard.add(fileName)
+        
+        self.files.difference_update(filesToDiscard)
+
+        print(self)
 
     def displayAuthors(self):
         for value in self.authors.values():
             print(value)
-
 
     def getAllFunctions(self):
         functions = []
@@ -180,13 +141,13 @@ class codeJamProfileSet:
 
             for fun in author.functions:
 
-                fns_seen += 1
-
                 fn_str = fun #due to refactor
 
                 #whitespace fn's still getting in. This will catch for that.
                 if fn_str.isspace() or fn_str == '':
                     continue
+
+                fns_seen += 1
 
                 # having these below meant that they didn't run if a function wasn't parse correctly
                 self.target.append(author.name)
@@ -222,7 +183,7 @@ class codeJamProfileSet:
                     for node_type in node_type_depths:
                         if node_type not in ast_feature_ext.type_depths:
                             node_type_depths[node_type].append(0.0)
-                except:
+                except Exception as e:
                     node_bigrams.append("")
                     node_types.append("")
                     depths = vstack([depths, csr_matrix([0,0], shape=(1, 2))])
@@ -340,7 +301,7 @@ class Author:
         self.files.union(other.files)
         
     def __str__(self):
-        return self.name+": "+str(len(self.files))+" files. "+str(len(self.lines))+" LOC, "+str(len(self.functions))+" complete functions from "+str(len(self.repos))+ " repos."
+        return self.name+": "+str(len(self.files))+" files. "+str(len(self.lines))+" LOC, "+str(len(self.functions))+" complete functions."
 
     def getGPSofSelf(self, skipGiven = True, mine = False):
         """Generates a GPS of all repos this author has contributed, skipping existing repos by default."""
