@@ -56,32 +56,35 @@ class codeJamProfileSet:
         print("Analyzing Files")
         filesToDiscard = set()
         for fileName in tqdm(self.files):
-                try:
-                    authorName = fileName.split("/")[-5]
-                    
-                    if authors is not None and authorName not in authors:
-                        continue
-                    
-                    if authorName not in self.authors:
-                        self.authors.update({authorName:Author(authorName)}) #add new author
-                        #print("Found new author: "+author.name)
-                    
-                    author = self.authors.get(authorName)
-
-                    if fileName not in author.files:
-                        author.files.add(fileName)
-                    
+            try:
+                authorName = fileName.split("/")[-5]
                 
+                if authors is not None and authorName not in authors:
+                    continue
+                
+                if authorName not in self.authors:
+                    self.authors.update({authorName:Author(authorName)}) #add new author
+                    #print("Found new author: "+author.name)
+                
+                author = self.authors.get(authorName)
+
+                if fileName not in author.files:
+                    author.files.add(fileName)
+
+                lines = open(fileName).readlines()
+                lineIndex = 0
+                for line in lines:
+                    author.lines[(fileName, lineIndex)] = line
+                    lineIndex += 1
+                
+                wholeFile = PPTools.Config.get_value("CodeJam", "whole_file")
+                if wholeFile:
+                    author.functions.append("".join(lines))
+                else:
                     import lizard
                     fileInfo = lizard.analyze_file(fileName)
 
-                    #maintain list of dicts containing the source code of specific functions. Same format as for lines
-                    lineIndex = 0
                     
-                    for line in open(fileName).readlines():
-                        author.lines[(fileName, lineIndex)] = line
-                        lineIndex += 1
-
 
                     for fun in fileInfo.function_list:
                         newFun = []            
@@ -90,11 +93,11 @@ class codeJamProfileSet:
                             newFun.append(author.lines[(fileName, lineIndex)])
 
                         author.functions.append("".join(newFun))
-                except Exception:
-                    filesToDiscard.add(fileName)
+            except Exception:
+                filesToDiscard.add(fileName)
         
         self.files.difference_update(filesToDiscard)
-
+        print("skipped "+str(len(filesToDiscard))+" files due to errors.")
         print(self)
 
     def displayAuthors(self):
