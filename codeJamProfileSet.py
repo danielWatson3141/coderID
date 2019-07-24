@@ -329,19 +329,3 @@ class Author:
         
     def __str__(self):
         return self.name+": "+str(len(self.files))+" files. "+str(len(self.lines))+" LOC, "+str(len(self.functions))+" complete functions."
-
-    def getGPSofSelf(self, skipGiven = True, mine = False):
-        """Generates a GPS of all repos this author has contributed, skipping existing repos by default."""
-
-        repos = self.getRepos(skip=skipGiven)
-        gps = codeJamProfileSet(self.name)
-
-        print("fetching repos...")
-        for repo in (repos):
-            if repo not in self.repos:
-                gps.addRepo(repo)
-
-        if mine:
-            gps.compileAuthors()   
-
-        return gps
