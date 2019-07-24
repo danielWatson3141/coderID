@@ -440,6 +440,14 @@ class MyPrompt(Cmd):
         print("Quitting.")
         raise SystemExit
 
+    def do_attackWith(self, args):
+        """De-anonymize the presently loaded repo using arg1 as training data"""
+        if len(args) != 0:
+            print("requires one argument")
+
+        targetGPS = self.activegps
+        weaponGPS = self.loadGPSFromFile(args)
+
     def do_multiClassTest(self, args):
         """Builds a model for each author and classifies by maximum liklihood"""
         expName = self.activegps.name
@@ -703,14 +711,15 @@ class MyPrompt(Cmd):
         clf.fit(features, targets)   #train the model
         return clf #return the model
 
-    def reFeSe(self, model, features, targets):
+    @staticmethod
+    def reFeSe(model, features, targets):
          #returns indeces of best features
 
         nFeatures = features.shape[1]
 
         #reduce sample size to decrease training time
-        maxSamples = int(self.config["Feature Selection"]["max_samples"])
-        reductionFactor = float(self.config["Feature Selection"]["reduction_factor"])
+        maxSamples = int(PPTools.Config.config["Feature Selection"]["max_samples"])
+        reductionFactor = float(PPTools.Config.config["Feature Selection"]["reduction_factor"])
         if len(targets) > maxSamples:
             from random import sample
             samples = sample(range(0,len(targets)), maxSamples)
@@ -727,7 +736,7 @@ class MyPrompt(Cmd):
         while True:
             previous = strength
             
-            strength, importances = self.evaluate(model, featureSubset, targets)
+            strength, importances = evaluate(model, featureSubset, targets)
             #print((nFeatures, strength))
             if strength < previous and not once:
                 break
@@ -758,8 +767,8 @@ class MyPrompt(Cmd):
         
         return previousBest
         
-
-    def evaluate(self, clf, features, targets):
+    @staticmethod
+    def evaluate(clf, features, targets):
         from sklearn.model_selection import cross_val_score, ShuffleSplit
         numSamples = features.shape[0]
         section = 'Cross Validation'
