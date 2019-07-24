@@ -50,7 +50,13 @@ class gitProfileSet:
     def compileAuthors(self, authors = None):
         """Mine all repos in the repo list for commits by those in authors. None for get all"""
         print("mining "+self.name)
+
+        reposToMine = []
         for repo in self.repos:
+            if repo not in self.minedRepos:
+                reposToMine.append(repo)
+
+        for repo in reposToMine:
             if not os.path.exists(repo+"/.git"): #in case the repo is one level down
                 repo = os.listdir(repo)[0]
                 print("moved to "+repo)
@@ -319,6 +325,16 @@ class gitProfileSet:
     def __lt__(self, other):
         return  self.name.lower() < other.name.lower()
 
+    def merge_into(self, other):
+        """merges other into self"""
+        other.compileAuthors()  #get author data first
+        for repo in other.repos:
+            self.repos.append(repo)
+        for author in other.authors:
+            if author.name in self.authors:
+                self.authors[author.name].merge(author)
+            else:
+                self.authors[author.name] = author
         
 class gitAuthor:
 
