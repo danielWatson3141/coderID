@@ -55,6 +55,27 @@ class codeJamProfileSet:
 
         print("Analyzing Files")
         filesToDiscard = set()
+
+        #decide whether to extract just functions or whole files
+        wholeFile = PPTools.Config.get_value("CodeJam", "whole_file")
+
+        if wholeFile:
+            print("Extracting whole file.")
+        else:
+            print("Extracting functions.")
+
+
+        #decide whether to limit the number of extracted files
+        limit = PPTools.Config.get_value("Pruning", "limit_to_k")
+
+        if limit:
+            limit = int(PPTools.Config.get_value("Pruning", "funcs_to_keep"))
+        else:
+            limit = float("inf")
+
+        print("file limit: "+str(limit))
+
+
         for fileName in tqdm(self.files):
             try:
                 authorName = fileName.split("/")[-5]
@@ -68,6 +89,9 @@ class codeJamProfileSet:
                 
                 author = self.authors.get(authorName)
 
+                if len(author.files) >= limit:
+                    continue
+
                 if fileName not in author.files:
                     author.files.add(fileName)
 
@@ -77,7 +101,7 @@ class codeJamProfileSet:
                     author.lines[(fileName, lineIndex)] = line
                     lineIndex += 1
                 
-                wholeFile = PPTools.Config.get_value("CodeJam", "whole_file")
+                
                 if wholeFile:
                     author.functions.append("".join(lines))
                 else:
