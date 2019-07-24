@@ -749,7 +749,7 @@ class MyPrompt(Cmd):
                 best = [m[0] for m in match]
                 featureSubset = features[:,best]
                 #do at least once more
-                once = True
+                #once = True
             else:   #if there are not many, sort and keep the top non-zero ones
                 nFeatures = int((1-reductionFactor)*nFeatures)-nzero
                 best = list(heapq.nlargest(nFeatures, match, key = itemgetter(1)))
@@ -917,7 +917,7 @@ class MyPrompt(Cmd):
         return [author for author in gps1.authors.keys() if author in gps2.authors]
         
 
-    def do_pruneGit(self, args):
+    def do_pruneAuthors(self, args):
         """Limit to N authors with between k and m functions. 0 for unlimited"""
         args = args.split(" ")
         n=0
@@ -947,7 +947,28 @@ class MyPrompt(Cmd):
 
         self.activegps.authors = new
         self.activegps.featuresDetected = False
-             
+
+    def pruneFunctions(self, args):
+        """keeps only K functions from all authors"""
+        if len(args) == 1:
+            k= int(args[0])
+        else:
+            print("Requires 1 arg for custom. Doing default set in config.ini.")
+            k = int(self.config["Pruning"]["funcs_to_keep"])
+
+        for author in tqdm(self.activegps.authors):
+            old = author.functions
+            new = list()
+            count = 0
+            for fun in old:
+                new.add(fun)
+                count+=1
+                if count == k:
+                    break
+                
+
+
+
     def do_loadGit(self, args):
         """Loads a single git repo. Can be local or remote."""
         if args =="":
