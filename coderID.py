@@ -23,6 +23,7 @@ import zipfile
 import string
 import gitProfileSet
 import ProfileSet
+import deAnonymizer
 import testCommitClassification
 import copy
 import numpy as np
@@ -72,6 +73,9 @@ class MyPrompt(Cmd):
             self.do_load(gps)
             break #just do it once. Hack around getting a single arbitrary element from set
         
+        if self.gpsList == set():
+            self.do_new("")
+
         #self.activegps = gitProfileSet.gitProfileSet("default")
 
         self.prompt = self.activegps.name+">"
@@ -736,7 +740,7 @@ class MyPrompt(Cmd):
         while True:
             previous = strength
             
-            strength, importances = evaluate(model, featureSubset, targets)
+            strength, importances = MyPrompt.evaluate(model, featureSubset, targets)
             #print((nFeatures, strength))
             if strength < previous and not once:
                 break
@@ -919,6 +923,40 @@ class MyPrompt(Cmd):
                 
                 if inCommon: #if not empty
                     print(file1+", "+file2+": "+str(inCommon))
+
+    def do_attack(self, args):
+        """attempt to de-anonymize a target profileSet"""
+
+        deAnon = deAnonymizer.DeAnonymizer(self.activegps.name)
+        deAnon.addGPS(self.activegps)
+
+        if len(args)<1:
+            print("needs a profile set to attack")
+            return
+
+        target = self.loadGPSFromFile(args)
+
+        report = deAnonymizer.testDeAnonymizer(deAnon, target)
+        print(str(report))
+
+        import csv
+
+        #write report results
+        with open(self.activegps.name+"_vs_"+target.name+"_attack_results.csv", 'w') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            
+            oneSample = report[0]
+            header = ["Author"]
+            header.extend(oneSample.keys())
+            #print(header)
+            writer.writerow(header)
+            #make classification report
+            for authorName, result in report.items():
+                result = result[authorName]
+                row = [authorName]+[value for key, value in result.items()]
+                print(row)
+                writer.writerow(row)
 
 
 
