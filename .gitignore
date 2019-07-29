@@ -5,7 +5,7 @@
 /gcj1/
 *.pyc
 *.csv*
-/savedSets/
+*savedSets/
 /classResults/
 /plots/
 /repos/
