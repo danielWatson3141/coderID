@@ -402,6 +402,7 @@ class MyPrompt(Cmd):
             author = self.activegps.authors[args] 
         except Exception:
             print("Author not found")
+            return
 
         self.save(author.getGPSofSelf())
 
@@ -413,6 +414,41 @@ class MyPrompt(Cmd):
 
         tempAuthor = gitProfileSet.gitAuthor(dev)
         return tempAuthor.getGPSofSelf()
+
+    def do_getCounterSet(self, args):
+        """build a gps of all authors work except this repo"""
+
+        print("finding repos by authors in this set")
+        reposToGet=self.activegps.fetch_authors_other_work()
+        #we really don't want forks of projects already in the set
+        projectsOwned = set()
+
+        for repo in self.activegps.repos:
+            projectName = repo.split("/")[-1]
+            projectsOwned.add(projectName)
+
+        uniqueRepos = []
+
+        #try really hard to filter out projects that match existing projects.
+        for repo in reposToGet:
+            projectName = repo.split("/")[-1]
+            skip=False
+            for ownedProject in projectsOwned:
+                if ownedProject in projectName or projectName in ownedProject:
+                    skip=True
+                    break
+            if not skip:
+                uniqueRepos.append(repo)
+
+        reposToGet = uniqueRepos
+
+        self.do_new(self.activegps.name+"_counter")
+        print("cloning repos")
+        for repoURL in tqdm(reposToGet):
+            path = self.clone_repo(repoURL)
+            self.activegps.addRepo(path)
+        print("found "+str(len(reposToGet)))
+        self.do_save()
 
     def do_mineDirectory(self, directory):
         """Mine all repos in directory and save the output"""
@@ -1238,26 +1274,36 @@ class MyPrompt(Cmd):
             print("Incorrect format. Example: BVLC/caffe")
 
     def clone_repo(self, targetRepo, destination = ""):
-        if destination == "":
-            destination = self.repoLocation + targetRepo.replace("/", "_")
 
-        
-        with open(os.getcwd()+"/github.token", 'r') as file:
-            import github
-            g = github.MainClass.Github(file.readline().split("\n")[0], timeout=30)
-        targetRepoURL = g.search_repositories(targetRepo)[0].clone_url
+        import re
+        if re.match(r"[A-Za-z]*/[A-Za-z]*",targetRepo):
+            with open(os.getcwd()+"/github.token", 'r') as file:
+                import github
+                g = github.MainClass.Github(file.readline().split("\n")[0], timeout=30)
+            targetRepoURL = g.search_repositories(targetRepo)[0].clone_url
+            if destination == "":
+                destination = self.repoLocation + targetRepo.replace("/", "_")
+        else:
+            targetRepoURL = targetRepo
+            repoName = targetRepoURL.split("/")[-2]+"_"+(targetRepoURL.split("/")[-1]).split(".")[0]
+            if destination == "":
+                destination = self.repoLocation + repoName
 
         if not os.path.exists(destination):
             os.mkdir(destination)
         import git
-        print("cloning "+targetRepoURL)
-        result = git.Git(destination).clone(targetRepoURL)
+        #print("cloning "+targetRepoURL)
+        try:
+            result = git.Git(destination).clone(targetRepoURL)
+        except git.GitCommandError:
+            #print("repo exists, skipping.")
+            pass
         #result
     
         #import traceback
         #traceback.print_exception(e)
         
-        return True
+        return destination
 
     
 def memory_limit():
