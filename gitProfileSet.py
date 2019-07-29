@@ -39,7 +39,7 @@ class gitProfileSet:
         self.minedRepos = set()
         
     def addRepo(self, args):
-        print("Adding repo: "+args)
+        #print("Adding repo: "+args)
         try:
             if args not in self.repos:
                 self.repos.append(args)
@@ -58,8 +58,8 @@ class gitProfileSet:
 
         for repo in reposToMine:
             if not os.path.exists(repo+"/.git"): #in case the repo is one level down
-                repo = os.listdir(repo)[0]
-                print("moved to "+repo)
+                repo = repo+"/"+os.listdir(repo)[0]
+                #print("moved to "+repo)
             if repo in self.minedRepos:
                 continue
             elif authors is not None:
@@ -329,13 +329,22 @@ class gitProfileSet:
         """merges other into self"""
         other.compileAuthors()  #get author data first
         for repo in other.repos:
-            self.repos.append(repo)
-        for author in other.authors:
-            if author.name in self.authors:
-                self.authors[author.name].merge(author)
+            if repo not in self.repos:
+                self.repos.append(repo)
+
+        for authorName, author in other.authors.items():
+            if authorName in self.authors:
+                self.authors[authorName].merge(author)
             else:
-                self.authors[author.name] = author
-        
+                self.authors[authorName] = author
+
+    def fetch_authors_other_work(self):
+        """attempts to grab the repos of all authors in the set"""
+        sumGPS = gitProfileSet("inverse_"+self.name)
+        repoList = []
+        for authorName, author in tqdm(self.authors.items()):
+            repoList.extend(author.getRepoListofSelf(skipGiven=self.repos))
+        return repoList
 class gitAuthor:
 
     def __init__(self, dev):
@@ -362,40 +371,43 @@ class gitAuthor:
     def getRepos(self, skip=None):
         """Get all repos associated with a given author, except for those in skip"""
         with open(os.getcwd()+"/github.token", 'r') as file:
-            g = github.MainClass.Github(file.readline)
-
+            g = github.MainClass.Github(file.readline())
+        while(g.rate_limiting[0]==0):
+            pass
         users = g.search_users(self.email+" in:email")
-
-        if len(users) == 0:
-            print("No matching gh user for author "+self.name)
-            return []
-        
-        if len(users) > 1:
-            print("Multiple gh users matching author "+self.name)
-        
         repoList = []
-        for user in users:
-            for repo in user.get_repos():
-                if repo.language in gitProfileSet.langList and (not skip or repo not in self.repos):
-                    repoList.append(repo)
+        try:
+            for user in users:
+                for repo in user.get_repos():
+                    if repo.language == "C++":
+                        repoList.append(repo)
+
+                break #get only first user's stuff
+        except Exception:
+            #print("email not found: "+self.email)
+            pass
+
+        try:
+            if repoList == []:
+                users = g.search_users(self.name+" in:fullname")
+            for user in users:
+                for repo in user.get_repos():
+                    if repo.language == "C++":
+                        repoList.append(repo)
+
+                break #get only first user's stuff
+        except Exception:
+            #print("name not found: "+self.name)
+            pass
 
         return repoList
 
-    def getGPSofSelf(self, skipGiven = True, mine = False):
+    def getRepoListofSelf(self, skipGiven = True, mine = False):
         """Generates a GPS of all repos this author has contributed, skipping existing repos by default."""
 
+        #print("fetching repos from "+self.name)
         repos = self.getRepos(skip=skipGiven)
-        gps = gitProfileSet(self.name)
-
-        print("fetching repos...")
-        for repo in (repos):
-            if repo not in self.repos:
-                gps.addRepo(repo)
-
-        if mine:
-            gps.compileAuthors()   
-
-        return gps
+        return [repo.clone_url for repo in repos]
 
 from enum import Enum
 class commitType(Enum):
