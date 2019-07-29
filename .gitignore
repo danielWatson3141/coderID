@@ -18,3 +18,4 @@ allExperiments.cid
 *.odc
 settings.json
 *gcjExtractedFiles*
+*.zip
