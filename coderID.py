@@ -186,15 +186,26 @@ class MyPrompt(Cmd):
                 print(gpsFile)
         
     def do_rm(self, args):
-        """Removes a specified gps permanently. pass * to remove all."""
+        """Removes a [1] permanently. pass * to remove all.
+        [1]: [author, repo, set]
+        [2]: [name]
+        If [1] is set, removes gps, otherwise, removes from current gps
+        """
 
-        for gpsFile in self.gpsList:
-            if gpsFile == args:
-                os.remove(self.saveLocation+gpsFile)
-                self.gpsList.remove(gpsFile)
-                break
-            if args == "*":
-                os.remove(self.saveLocation+gpsFile)
+        args = args.split(" ")
+
+        if args[0] in ["author", "repo", "set"]:
+            if args[0] == "author":
+                authorName = " ".join(args[1:])
+                self.activegps.rmAuthor(authorName)
+            elif args[0] == "repo":
+                self.activegps.rmRepo(args[1])
+            else:
+                os.remove(self.saveLocation+args[1])
+                self.gpsList.remove(args[1])
+        else:
+            print("check usage")
+            return
 
     def do_minegcj(self, args):
         """gathers info from extracted gcj directory. Pulls everything. Use zipSearch for partial extraction or extract full gcj.zip. Overwrites existing set"""
@@ -441,8 +452,11 @@ class MyPrompt(Cmd):
                 uniqueRepos.append(repo)
 
         reposToGet = uniqueRepos
+        alreadySeenCommits = self.activegps.commits #remember the commits we've seen to avoid double counting them
 
-        self.do_new(self.activegps.name+"_counter")
+        self.do_new(self.activegps.name+"_counter") #Make a new set
+
+        self.activegps.commits.update(alreadySeenCommits) #put the already seen commits into the new set's commits to avoid double counting them
         print("cloning repos")
         for repoURL in tqdm(reposToGet):
             path = self.clone_repo(repoURL)
@@ -1065,6 +1079,10 @@ class MyPrompt(Cmd):
         self.activegps.displayAuthors()
         #print(self.activegps)
 
+    def do_repoInfo(self, args):
+        """prints the reposin this profileSet"""
+        for repo in self.activegps.repos:
+            print(repo)
 
     def do_generateGpsReport(self, args):
         """
@@ -1181,7 +1199,7 @@ class MyPrompt(Cmd):
                 target = author.commits.values()
             
             elif target == "repos":
-                target = author.repos.values()
+                target = author.repos
 
             elif target == "files":
                 target = author.files
@@ -1322,7 +1340,7 @@ def get_memory():
 
 if __name__ == '__main__':
     
-    #memory_limit() # Limitates maximun memory usage to 90%
+    memory_limit() # Limitates maximun memory usage to 90%
     try:
         prompt = MyPrompt()
         prompt.prompt = 'coderID> '

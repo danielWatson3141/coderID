@@ -37,6 +37,7 @@ class gitProfileSet:
         self.featuresSelected = None
         self.termsSelected = None
         self.minedRepos = set()
+        self.commits = set()
         
     def addRepo(self, args):
         #print("Adding repo: "+args)
@@ -45,7 +46,13 @@ class gitProfileSet:
                 self.repos.append(args)
         except Exception:
             print("Couldn't get that one...")
-        #self.compileAuthors(newRepo)    
+        #self.compileAuthors(newRepo)
+
+    def rmRepo(self, arg):
+        self.repos.remove(arg)
+
+    def rmAuthor(self, arg):
+        self.authors[arg] = None  
     
     def compileAuthors(self, authors = None):
         """Mine all repos in the repo list for commits by those in authors. None for get all"""
@@ -83,8 +90,12 @@ class gitProfileSet:
                         #print("Found new author: "+author.name)
                     
                     author = self.authors.get(author.name)
+                    
+                    if commit.hash in author.commits or commit.hash in self.commits:
+                        continue    #don't reprocess seen hashes
 
-                    author.commits.add(repo + commit.hash)
+                    self.commits.add(commit.hash)
+                    author.commits.add(commit.hash)
 
                     if repo not in author.repos:
                         author.repos.add(repo)
@@ -137,6 +148,7 @@ class gitProfileSet:
             self.minedRepos.add(repo)
             print(str("finished"+str(miner._path_to_repo)))
             print(self)
+        self.repos = self.minedRepos
 
     def displayAuthors(self):
         for value in self.authors.values():
@@ -351,7 +363,7 @@ class gitAuthor:
         if dev is not None:
             self.name = dev.name
             self.email = dev.email
-        self.commits = set() #store with repo+commitHash
+        self.commits = set() #store with commitHash
         self.files = set()
         self.functions = list() #list of str
         self.lines = dict() #key: {commitHash,file.cpp,lineNumber} value: literal code
