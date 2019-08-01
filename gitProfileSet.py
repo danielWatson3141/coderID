@@ -354,8 +354,37 @@ class gitProfileSet:
         """attempts to grab the repos of all authors in the set"""
         sumGPS = gitProfileSet("inverse_"+self.name)
         repoList = []
-        for authorName, author in tqdm(self.authors.items()):
-            repoList.extend(author.getRepoListofSelf(skipGiven=self.repos))
+        from git import Repo
+        
+        for repoLocation in self.repos:
+            
+            local = Repo(repoLocation)
+            remote = local.remotes[0]
+
+            url = list(remote.urls)[0]
+            if "github.com" not in url:
+                print("not a github url, can't get contributors for "+repoLocation)
+                continue
+
+            
+            #initialize pygithub object
+            with open(os.getcwd()+"/github.token", 'r') as file:
+                g = github.MainClass.Github(file.readline())
+            while(g.rate_limiting[0]==0):
+                pass
+
+            import re
+            splUrl = re.split("[./:]", url)
+            fullRepoName = splUrl[5]+"/"+splUrl[6] #get qualified project name from remote url
+
+            githubRepo = g.get_repo(fullRepoName)
+            #get Contributors
+            contributors = (githubRepo.get_contributors())
+            
+            for contributor in tqdm(contributors):
+                for repo in contributor.get_repos():
+                    repoList.append(repo.full_name)
+
         return repoList
 class gitAuthor:
 

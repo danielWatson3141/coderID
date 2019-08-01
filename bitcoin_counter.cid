@@ -1,0 +1,8 @@
+load bitcoin_bitcoin
+pruneAuthors
+getCounterSet
+save
+compile
+save
+getFeatures
+save

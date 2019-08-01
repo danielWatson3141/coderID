@@ -1,0 +1,5 @@
+- Investigate requirements for ESEJ
+	-Make data available
+		-RepoReapers CSV, ensure CSV downloading is working
+
+- Address criticism is conference reject

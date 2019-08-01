@@ -427,7 +427,7 @@ class MyPrompt(Cmd):
         return tempAuthor.getGPSofSelf()
 
     def do_getCounterSet(self, args):
-        """build a gps of all authors work except this repo"""
+        """build a gps of all authors work except the ones contained in this set"""
 
         print("finding repos by authors in this set")
         reposToGet=self.activegps.fetch_authors_other_work()
@@ -459,7 +459,12 @@ class MyPrompt(Cmd):
         self.activegps.commits.update(alreadySeenCommits) #put the already seen commits into the new set's commits to avoid double counting them
         print("cloning repos")
         for repoURL in tqdm(reposToGet):
-            path = self.clone_repo(repoURL)
+            try:
+                path = self.clone_repo(repoURL)
+            except Exception as e:
+                print("Couldn't get "+repoURL)
+                continue
+
             self.activegps.addRepo(path)
         print("found "+str(len(reposToGet)))
         self.do_save()
@@ -1228,8 +1233,18 @@ class MyPrompt(Cmd):
             print("Hint: view Dan: 10 lines")
             return
     
+    def do_getGitReposFromFile(self, args):
+        if args == "":
+            print("Must supply a source filepath.")
+            return
 
-    def do_getGitRepos(self,args):
+        data = (open(args).readlines())
+
+        for repoName in data:
+            self.do_load(repoName.strip())
+            self.do_save()
+
+    def do_getGitReposFromRepoReapers(self,args):
         """Read repos from reporeapers .csv file, fetch and store in target directory, using temp if specified. Use temp if trying to download to external drive"""
         if args == "":
             print("Must supply a source filepath.")
