@@ -355,7 +355,11 @@ class gitProfileSet:
         sumGPS = gitProfileSet("inverse_"+self.name)
         repoList = []
         from git import Repo
-        
+
+        authorEmails = set()
+        for authorEmail in self.authors.values():
+            authorEmails.add(authorEmail)
+
         for repoLocation in self.repos:
             
             local = Repo(repoLocation)
@@ -382,8 +386,9 @@ class gitProfileSet:
             contributors = (githubRepo.get_contributors())
             
             for contributor in tqdm(contributors):
-                for repo in contributor.get_repos():
-                    repoList.append(repo.full_name)
+                if not authorEmails or contributor.email in authorEmails:
+                    for repo in contributor.get_repos():
+                        repoList.append(repo.full_name)
 
         return repoList
 class gitAuthor:
