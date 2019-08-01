@@ -385,10 +385,9 @@ class gitProfileSet:
             #get Contributors
             contributors = (githubRepo.get_contributors())
             
-            for contributor in tqdm(contributors):
-                if not authorEmails or contributor.email in authorEmails:
-                    for repo in contributor.get_repos():
-                        repoList.append(repo.full_name)
+            for contributor in tqdm(contributors):               
+                for repo in contributor.get_repos():
+                    repoList.append(repo.full_name)
 
         return repoList
 class gitAuthor:
