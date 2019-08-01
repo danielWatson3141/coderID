@@ -466,7 +466,7 @@ class MyPrompt(Cmd):
                 continue
 
             self.activegps.addRepo(path)
-        print("found "+str(len(reposToGet)))
+        print("found "+str(len(self.activegps.repos)))
         self.do_save()
 
     def do_mineDirectory(self, directory):

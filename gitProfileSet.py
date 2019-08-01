@@ -387,7 +387,7 @@ class gitProfileSet:
             
             for contributor in tqdm(contributors):               
                 for repo in contributor.get_repos():
-                    repoList.append(repo.full_name)
+                    repoList.append(repo.clone_url)
 
         return repoList
 class gitAuthor:
