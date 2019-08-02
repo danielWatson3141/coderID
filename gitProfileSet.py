@@ -73,90 +73,95 @@ class gitProfileSet:
                 reposToMine.append(repo)
 
         for repo in reposToMine:
-            if not os.path.exists(repo+"/.git"): #in case the repo is one level down
-                repo = repo+"/"+os.listdir(repo)[0]
-                #print("moved to "+repo)
-            if repo in self.minedRepos:
-                continue
-        
-            self.minedRepos.add(repo)
-            #if not os.path.exists(repo+".git"):
-            #    repo = os.listdir(repo)[0]
+            try:
+                if not os.path.exists(repo+"/.git"): #in case the repo is one level down
+                    repo = repo+"/"+os.listdir(repo)[0]
+                    #print("moved to "+repo)
+                if repo in self.minedRepos:
+                    continue
+            
+                self.minedRepos.add(repo)
+                #if not os.path.exists(repo+".git"):
+                #    repo = os.listdir(repo)[0]
+                
+                miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
+                repository = pydriller.GitRepository(repo)
+                remote = self.get_remote(repo)
+                print("Scanning repo: "+miner._path_to_repo)
+                
 
-            miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
-            repository = pydriller.GitRepository(repo)
-            remote = self.get_remote(repo)
-            print("Scanning repo: "+miner._path_to_repo)
+                for commit in tqdm(miner.traverse_commits()):
+                    author = commit.author
+                    
+                    if author.name not in self.aliases:
+                        ghCommit = remote.get_commit(commit.hash)
+                        namedUser = ghCommit.author
+                        if not namedUser:
+                            continue
+                        if namedUser.login not in self.authors:
+                            self.authors[namedUser.login] = gitAuthor(namedUser)
+                        self.aliases[author.name] = namedUser.login
+
+                    author = self.authors[self.aliases[author.name]]
+                    
+                    if commit.hash in author.commits or commit.hash in self.commits:
+                        continue    #don't reprocess seen hashes
+
+                    self.commits.add(commit.hash)
+                    author.commits.add(commit.hash)
+
+                    if repo not in author.repos:
+                        author.repos.add(repo)
+                    
+                    for mod in commit.modifications:
+                        mod._calculate_metrics()
+                        if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
+                            continue
                         
-
-            for commit in tqdm(miner.traverse_commits()):
-                author = commit.author
-                
-                if author.name not in self.aliases:
-                    ghCommit = remote.get_commit(commit.hash)
-                    namedUser = ghCommit.author
-                    if not namedUser:
-                        continue
-                    if namedUser.login not in self.authors:
-                        self.authors[namedUser.login] = gitAuthor(namedUser)
-                    self.aliases[author.name] = namedUser.login
-
-                author = self.authors[self.aliases[author.name]]
-                
-                if commit.hash in author.commits or commit.hash in self.commits:
-                    continue    #don't reprocess seen hashes
-
-                self.commits.add(commit.hash)
-                author.commits.add(commit.hash)
-
-                if repo not in author.repos:
-                    author.repos.add(repo)
-                
-                for mod in commit.modifications:
-                    mod._calculate_metrics()
-                    if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
-                        continue
-                    
-                    author.files.add(mod.new_path)
-                    #parse diff and add lines to list
-                    
-                    newSC = list()
-                    leDiff = repository.parse_diff(mod.diff)
-                    for num, line in leDiff["added"]:
-                        newSC.append(line)
-
-                    from lizard import analyze_file as liz
-                    fileInfo = liz.analyze_source_code(mod.new_path, "\n".join(newSC))
-
-                    #maintain list of dicts containing the source code of specific functions. Same format as for lines
-                    lineIndex = 0
-                    
-                    for fun in fileInfo.function_list:
-                        #Make sure these appear in the "function"
-                        arg_list_termination = r"\)\s*{"
-                        started = False
-                        newFun = dict()
-                        lineStr = ""
-                        try:
-                            while(leDiff["added"][lineIndex][0]<fun.start_line):
-                                lineIndex+=1
+                        author.files.add(mod.new_path)
+                        #parse diff and add lines to list
                         
-                            while(leDiff["added"][lineIndex][0]<fun.end_line+1):
-                                last_lineStr = lineStr
-                                lineStr = leDiff["added"][lineIndex][1]
-                                
-                                if not started and re.search(arg_list_termination, "".join([lineStr,last_lineStr])):
-                                    started = True
+                        newSC = list()
+                        leDiff = repository.parse_diff(mod.diff)
+                        for num, line in leDiff["added"]:
+                            newSC.append(line)
+
+                        from lizard import analyze_file as liz
+                        fileInfo = liz.analyze_source_code(mod.new_path, "\n".join(newSC))
+
+                        #maintain list of dicts containing the source code of specific functions. Same format as for lines
+                        lineIndex = 0
+                        
+                        for fun in fileInfo.function_list:
+                            #Make sure these appear in the "function"
+                            arg_list_termination = r"\)\s*{"
+                            started = False
+                            newFun = dict()
+                            lineStr = ""
+                            try:
+                                while(leDiff["added"][lineIndex][0]<fun.start_line):
+                                    lineIndex+=1
+                            
+                                while(leDiff["added"][lineIndex][0]<fun.end_line+1):
+                                    last_lineStr = lineStr
+                                    lineStr = leDiff["added"][lineIndex][1]
                                     
-                                newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):lineStr})
-                                lineIndex+=1
-                        except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
-                            pass
+                                    if not started and re.search(arg_list_termination, "".join([lineStr,last_lineStr])):
+                                        started = True
+                                        
+                                    newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):lineStr})
+                                    lineIndex+=1
+                            except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
+                                pass
 
-                        if started and len(newFun) > 1 and '}' in lineStr + last_lineStr:
-                            author.lines.update(newFun)
-                            author.functions.append(self.functionToString(newFun)) 
-                                
+                            if started and len(newFun) > 1 and '}' in lineStr + last_lineStr:
+                                author.lines.update(newFun)
+                                author.functions.append(self.functionToString(newFun)) 
+            
+            except Exception as e:
+                print("problem processing "+repo)
+                continue
+                    
             self.minedRepos.add(repo)
             print(str("finished"+str(miner._path_to_repo)))
             print(self)
@@ -272,9 +277,12 @@ class gitProfileSet:
 
                 del tokens, token_text
             
-        inputs = np.array(inputs)
-        node_types = np.array(node_types)
-        node_bigrams = np.array(node_bigrams)
+        inputs_array = np.array(inputs)
+        del inputs
+        node_types_array = np.array(node_types)
+        del node_types
+        node_bigrams_array = np.array(node_bigrams)
+        del node_bigrams
 
         print("Functions successfully parsed: {:.2f}%".format(100 * (1 - fns_failed / fns_seen)))
         print("Vectorizing...")
@@ -307,14 +315,14 @@ class gitProfileSet:
         del node_type_depth_names
 
         # Tokens TFIDF
-        self.counts = hstack([self.counts, vectorizer.fit_transform(inputs)],
+        self.counts = hstack([self.counts, vectorizer.fit_transform(inputs_array)],
                              format = 'csr')
         self.terms += vectorizer.get_feature_names()
         updateTypes(vectorizer.get_feature_names(), "token_TF/IDF")
 
         # AST Node Types TF and TFIDF
         self.counts = hstack([self.counts, vectorizer.fit_transform(node_types),
-                              vectorizer_tf.fit_transform(node_types)], format='csr')
+                              vectorizer_tf.fit_transform(node_types_array)], format='csr')
         self.terms += vectorizer.get_feature_names() + vectorizer_tf.get_feature_names()
 
         updateTypes(vectorizer.get_feature_names(), "node_type_TF/IDF")
@@ -325,14 +333,14 @@ class gitProfileSet:
         vectorizer = TfidfVectorizer(analyzer="word", lowercase=False,
                                      tokenizer=lambda x: x.split(";"))
 
-        self.counts = hstack([self.counts, vectorizer.fit_transform(node_bigrams)],
+        self.counts = hstack([self.counts, vectorizer.fit_transform(node_bigrams_array)],
                              format='csr')
         self.terms += vectorizer.get_feature_names()
         updateTypes(vectorizer.get_feature_names(), "AST_Node_Bigrams_TF/IDF")
         
 
 
-        del inputs, node_types, code_unigrams, node_bigrams
+        del inputs_array, node_types_array, code_unigrams, node_bigrams_array
 
         self.target = np.array(self.target)
         self.featuresDetected = True
