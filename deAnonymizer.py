@@ -23,12 +23,9 @@ class DeAnonymizer:
         targetTargets = gps.target
         targetNames = gps.terms
 
-        if not hasattr(self.profileSet, "counts"):
-            self.profileSet.getFeatures()
-
-        trainedFeatures = gps.counts
-        trainedTargets = gps.target
-        trainedNames = gps.terms
+        trainedFeatures = self.profileSet.counts
+        trainedTargets = self.profileSet.target
+        trainedNames = self.profileSet.terms
 
         print("unifying features")
 
@@ -38,7 +35,7 @@ class DeAnonymizer:
 
         trainedNameIndeces = dict()
         for index in range(len(trainedNames)):
-            trainedNameIndeces[targetNames[index]] = index
+            trainedNameIndeces[trainedNames[index]] = index
 
         #take the intersection of available features between the target and source
         commonNames = listIntersection(targetNames, trainedNames)
@@ -108,7 +105,7 @@ def testDeAnonymizer(deAnonymizer, target):
 
     report = dict()
     print("producing report")
-    for authorName in tqdm(deAnonymizer.authors):
+    for authorName in tqdm(target.authors):
         
         positives = [i for i in range(len(predicted)) if predicted[i] == authorName]
         negatives = [i for i in range(len(predicted)) if predicted[i] != authorName]
@@ -118,8 +115,8 @@ def testDeAnonymizer(deAnonymizer, target):
         falsePositives = [i for i in range(len(predicted)) if predicted[i] == authorName and groundTruth[i] != authorName]
         falseNegatives = [i for i in range(len(predicted)) if predicted[i] != authorName and groundTruth[i] == authorName]
 
-        pr = len(positives) / len(predicted)
-        nr = len(negatives) / len(predicted)
+        pr = len(positives) / len(predicted) #total presence in test set
+        nr = len(negatives) / len(predicted) # 1-pr
 
         tpr = len(truePositives) / (len(positives)+1)
         tnr = len(trueNegatives) / (len(negatives)+1)
@@ -127,6 +124,17 @@ def testDeAnonymizer(deAnonymizer, target):
         fnr = 1-tnr
 
         report[authorName] = {"pr":pr,"nr": nr,"tpr":tpr, "tnr":tnr, "fpr":fpr, "fnr":fnr}
-        
+
+    averages = dict()
+    import statistics
+    
+    for stat in ["pr", "nr", "tpr", "tnr", "fpr", "fnr"]:
+        averages[stat] = statistics.mean([report[authName][stat] for authName in report])
+    
+    report["avg"] = averages
 
     return report
+
+from collections import Counter
+def cOcc(iter):
+    return Counter(iter)
