@@ -100,30 +100,34 @@ def testDeAnonymizer(deAnonymizer, target):
 
     report = dict()
     print("producing report")
+    samples = range(len(predicted))
     for authorName in tqdm(target.authors):
         
-        positives = [i for i in range(len(predicted)) if predicted[i] == authorName]
-        negatives = [i for i in range(len(predicted)) if predicted[i] != authorName]
+        positives = [i for i in samples if predicted[i] == authorName]
+        negatives = [i for i in samples if predicted[i] != authorName]
 
-        truePositives = [i for i in range(len(predicted)) if predicted[i] == authorName and predicted[i] == groundTruth[i]]
-        trueNegatives = [i for i in range(len(predicted)) if predicted[i] != authorName and groundTruth[i] != authorName]
-        falsePositives = [i for i in range(len(predicted)) if predicted[i] == authorName and groundTruth[i] != authorName]
-        falseNegatives = [i for i in range(len(predicted)) if predicted[i] != authorName and groundTruth[i] == authorName]
+        occurances = [i for i in samples if groundTruth[i] == authorName]
 
-        pr = len(positives) / len(predicted) #total presence in test set
-        nr = len(negatives) / len(predicted) # 1-pr
+        truePositives = [i for i in samples if predicted[i] == authorName and predicted[i] == groundTruth[i]]
+        trueNegatives = [i for i in samples if predicted[i] != authorName and groundTruth[i] != authorName]
+        falsePositives = [i for i in samples if predicted[i] == authorName and groundTruth[i] != authorName]
+        falseNegatives = [i for i in samples if predicted[i] != authorName and groundTruth[i] == authorName]
+
+        pr = len(positives) / len(predicted) #positive rate for the author
+        
+        oc = len(occurances) / len(predicted)
 
         tpr = len(truePositives) / (len(positives)+1)
         tnr = len(trueNegatives) / (len(negatives)+1)
         fpr = 1-tpr
         fnr = 1-tnr
 
-        report[authorName] = {"pr":pr,"nr": nr,"tpr":tpr, "tnr":tnr, "fpr":fpr, "fnr":fnr}
+        report[authorName] = {"pr":pr,"oc": oc,"tpr":tpr, "tnr":tnr, "fpr":fpr, "fnr":fnr}
 
     averages = dict()
     import statistics
     
-    for stat in ["pr", "nr", "tpr", "tnr", "fpr", "fnr"]:
+    for stat in ["pr", "oc", "tpr", "tnr", "fpr", "fnr"]:
         averages[stat] = statistics.mean([report[authName][stat] for authName in report])
     
     report["avg"] = averages
