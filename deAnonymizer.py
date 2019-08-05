@@ -2,6 +2,7 @@ from gitProfileSet import *
 from Classifier import *
 from coderID import MyPrompt
 from Classifier import *
+from sklearn import metrics
 class DeAnonymizer:
 
     def __init__(self, weapon):
@@ -132,7 +133,23 @@ def testDeAnonymizer(deAnonymizer, target):
     
     report["avg"] = averages
 
-    return report
+    fpr, tpr, thresholds = confidenceCurves(pred, groundTruth, odds)
+    curves = [fpr, tpr, thresholds]
+
+    auc = auc(fpr, tpr)
+    report["auc"] = auc
+
+    return (report, curves)
+
+def confidenceCurves(pred, true, confidence):
+    def correct(i):
+        if pred[i] == true[i]:
+            return "correct"
+        else:
+            return "incorrect"
+
+    correctNess = [correct(i) for i in range(len(pred))]
+    return metrics.roc_curve(correctNess, confidence, pos_label="correct")
 
 from collections import Counter
 def cOcc(iter):

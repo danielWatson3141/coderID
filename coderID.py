@@ -39,7 +39,7 @@ from sklearn.model_selection import cross_val_score,ShuffleSplit, StratifiedKFol
 from sklearn import metrics, utils
 from sklearn.metrics import classification_report
 
-from plotting import plot_roc_auc_curves, plot_function_length_histogram, plot_confusion_matrix
+from plotting import plot_roc_auc_curves, plot_function_length_histogram, plot_confusion_matrix, plot_author_roc_auc_curve
 
 
 from tqdm import tqdm
@@ -518,8 +518,10 @@ class MyPrompt(Cmd):
 
         deAnon = deAnonymizer.DeAnonymizer(weaponGPS)
 
-        report = deAnonymizer.testDeAnonymizer(deAnon, targetGPS)
+        report, curves = deAnonymizer.testDeAnonymizer(deAnon, targetGPS)
         print(str(report))
+
+        plot_author_roc_auc_curve("everyone", curves[0], curves[1],report["auc"],session_name=self.activegps.name+"_vs_"+targetGPS.name+"_attack_roc.png")
 
         import csv
 
