@@ -4,28 +4,27 @@ from coderID import MyPrompt
 from Classifier import *
 class DeAnonymizer:
 
-    def __init__(self, name="default"):
-        self.unionProfileSet = gitProfileSet(name)
-        self.authors = self.unionProfileSet.authors
+    def __init__(self, weapon):
+        self.profileSet = weapon
+        self.authors = self.profileSet.authors
         self.model = None
-        self.trainedNames = None
-
-    def addGPS(self, gps):
-        """adds gps to self"""
-        self.unionProfileSet.merge_into(gps)            
+        self.trainedNames = None           
 
     def attack(self, gps):
         """returns an NxK martrix with N=number of functions in gps, K=number of authors in self.authors"""
         """each index is the predicted probability that the author wrote the function"""
 
+        if not hasattr(self.profileSet, "counts"):
+            self.profileSet.getFeatures()
         if not hasattr(gps, "counts"):
             gps.getFeatures()
+
         targetFeatures = gps.counts
         targetTargets = gps.target
         targetNames = gps.terms
 
-        if not hasattr(self.unionProfileSet, "counts"):
-            self.unionProfileSet.getFeatures()
+        if not hasattr(self.profileSet, "counts"):
+            self.profileSet.getFeatures()
 
         trainedFeatures = gps.counts
         trainedTargets = gps.target
@@ -122,11 +121,12 @@ def testDeAnonymizer(deAnonymizer, target):
         pr = len(positives) / len(predicted)
         nr = len(negatives) / len(predicted)
 
-        tpr = len(truePositives) / len(positives)+1
-        tnr = len(trueNegatives) / len(negatives)+1
+        tpr = len(truePositives) / (len(positives)+1)
+        tnr = len(trueNegatives) / (len(negatives)+1)
         fpr = 1-tpr
         fnr = 1-tnr
 
         report[authorName] = {"pr":pr,"nr": nr,"tpr":tpr, "tnr":tnr, "fpr":fpr, "fnr":fnr}
+        
 
     return report

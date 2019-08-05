@@ -276,13 +276,16 @@ class gitProfileSet:
                     tokFeatures = vstack([tokFeatures, featureExtractors.featureExtractors.tokenLevel(tokens)])
 
                 del tokens, token_text
-            
+        
+        import gc
+        gc.collect() 
         inputs_array = np.array(inputs)
         del inputs
         node_types_array = np.array(node_types)
         del node_types
         node_bigrams_array = np.array(node_bigrams)
         del node_bigrams
+        gc.collect() 
 
         print("Functions successfully parsed: {:.2f}%".format(100 * (1 - fns_failed / fns_seen)))
         print("Vectorizing...")
@@ -321,7 +324,7 @@ class gitProfileSet:
         updateTypes(vectorizer.get_feature_names(), "token_TF/IDF")
 
         # AST Node Types TF and TFIDF
-        self.counts = hstack([self.counts, vectorizer.fit_transform(node_types),
+        self.counts = hstack([self.counts, vectorizer.fit_transform(node_types_array),
                               vectorizer_tf.fit_transform(node_types_array)], format='csr')
         self.terms += vectorizer.get_feature_names() + vectorizer_tf.get_feature_names()
 

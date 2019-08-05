@@ -501,11 +501,50 @@ class MyPrompt(Cmd):
 
     def do_attackWith(self, args):
         """De-anonymize the presently loaded repo using arg1 as training data"""
-        if len(args) != 0:
+        if len(args) == 0:
             print("requires one argument")
 
         targetGPS = self.activegps
         weaponGPS = self.loadGPSFromFile(args)
+
+        import deAnonymizer
+
+        deAnon = deAnonymizer.DeAnonymizer(weaponGPS)
+
+        report = deAnonymizer.testDeAnonymizer(deAnon, targetGPS)
+        print(str(report))
+
+        import csv
+
+        #write report results
+        with open(self.activegps.name+"_vs_"+targetGPS.name+"_attack_results.csv", 'w') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            
+            oneSample = list(report.values())[0]
+            header = ["Author"]
+            header.extend(oneSample.keys())
+            print(header)
+            writer.writerow(header)
+            #make classification report
+            for authorName, result in report.items():
+                row = [authorName]+[value for key, value in result.items()]
+                print(row)
+                writer.writerow(row)
+
+    def do_filterAuthors(self, args):
+        """takes a gps, filters current set's authors to only those in target set"""
+        if len(args) == 0:
+            print("Check usage")
+            return
+
+        targetGPS = self.loadGPSFromFile(args)
+        newAuthors = self.activegps.authors.copy()
+        for authorName, author in self.activegps.authors:
+            if authorName in self.targetGPS.authors:
+                newAuthors[authorName]=author
+
+        self.activegps.authors = newAuthors
 
     def do_multiClassTest(self, args):
         """Builds a model for each author and classifies by maximum liklihood"""
