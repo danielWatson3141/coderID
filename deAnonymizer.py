@@ -133,7 +133,11 @@ def testDeAnonymizer(deAnonymizer, target):
     
     report["avg"] = averages
 
+<<<<<<< HEAD
     fpr, tpr, thresholds = confidenceCurves(predicted, groundTruth, odds)
+=======
+    fpr, tpr, thresholds = confidenceCurves(pred, groundTruth, odds)
+>>>>>>> a576c47cbbc2d4d3d324f031d06bf696ba415743
     curves = [fpr, tpr, thresholds]
 
     auc = auc(fpr, tpr)
