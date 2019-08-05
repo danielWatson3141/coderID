@@ -14,11 +14,6 @@ class DeAnonymizer:
         """returns an NxK martrix with N=number of functions in gps, K=number of authors in self.authors"""
         """each index is the predicted probability that the author wrote the function"""
 
-        if not hasattr(self.profileSet, "counts"):
-            self.profileSet.getFeatures()
-        if not hasattr(gps, "counts"):
-            gps.getFeatures()
-
         targetFeatures = gps.counts
         targetTargets = gps.target
         targetNames = gps.terms

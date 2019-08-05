@@ -507,6 +507,13 @@ class MyPrompt(Cmd):
         targetGPS = self.activegps
         weaponGPS = self.loadGPSFromFile(args)
 
+        if not hasattr(targetGPS, "counts"):
+            self.targetGPS.getFeatures()
+            self.save(targetGPS)
+        if not hasattr(weaponGPS, "counts"):
+            weaponGPS.getFeatures()
+            self.save(weaponGPS)
+
         import deAnonymizer
 
         deAnon = deAnonymizer.DeAnonymizer(weaponGPS)
