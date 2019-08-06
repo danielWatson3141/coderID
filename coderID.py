@@ -330,10 +330,11 @@ class MyPrompt(Cmd):
         clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
 
         #reduce the features
+        print("Selecting features")
         selectedFeatures = self.reFeSe(clf, self.activegps.counts, self.activegps.target)
         trFeatures = self.activegps.counts[:,selectedFeatures]    #feature select for the athor
         terms = [self.activegps.terms[i] for i in selectedFeatures]
-
+        print("Evaluating Model")
         #evaluate model
         stre, pred, tar, importances = self.evaluate(clf, trFeatures, self.activegps.target)
         
@@ -879,9 +880,9 @@ class MyPrompt(Cmd):
         section = 'Cross Validation'
 
         splits = PPTools.Config.get_value(section, 'n_splits')
-        trSize = int(min(PPTools.Config.get_value(section, 'train_min'),
+        trSize = int(max(PPTools.Config.get_value(section, 'train_min'),
                          numSamples * PPTools.Config.get_value(section, 'train_ratio')))
-        teSize = int(min(PPTools.Config.get_value(section, 'test_min'),
+        teSize = int(max(PPTools.Config.get_value(section, 'test_min'),
                          numSamples * PPTools.Config.get_value(section, 'test_ratio')))
         featureCount = features.shape[1]
         cv = ShuffleSplit(n_splits=splits, train_size=trSize, test_size=teSize)
