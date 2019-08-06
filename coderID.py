@@ -1,6 +1,7 @@
 
 from cmd import Cmd
 
+import debug
 import pickle
 import os
 import zipfile
@@ -330,7 +331,7 @@ class MyPrompt(Cmd):
 
         #reduce the features
         selectedFeatures = self.reFeSe(clf, self.activegps.counts, self.activegps.target)
-        trFeatures = trFeatures[:,selectedFeatures]    #feature select for the athor
+        trFeatures = self.activegps.counts[:,selectedFeatures]    #feature select for the athor
         terms = [self.activegps.terms[i] for i in selectedFeatures]
 
         #evaluate model
