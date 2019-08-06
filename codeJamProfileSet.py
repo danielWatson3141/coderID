@@ -66,7 +66,7 @@ class codeJamProfileSet:
 
 
         #decide whether to limit the number of extracted files
-        limit = PPTools.Config.get_value("Pruning", "limit_to_k")
+        limit = bool(PPTools.Config.get_value("Pruning", "limit_to_k"))
 
         if limit:
             limit = int(PPTools.Config.get_value("Pruning", "funcs_to_keep"))

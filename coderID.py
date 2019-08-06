@@ -318,35 +318,26 @@ class MyPrompt(Cmd):
         if len(args) >= 3:
             expName = args[2]
 
-        if not self.ps.featuresDetected:
-            self.ps.detectFeatures(maxDocs)
+        if not self.activegps.featuresDetected:
+            self.activegps.getFeatures()
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import cross_val_score,ShuffleSplit
         from sklearn import metrics, utils
         from sklearn.metrics import classification_report
 
         print("Generating CM")
-        n_samples = len(self.ps.target)
+        n_samples = len(self.activegps.target)
         clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
         
-        #shuffle the dataset
-        features, targets = utils.shuffle(self.ps.counts, self.ps.target)
-        
-        #fit the model to the first 2/3 of the samples
-        clf.fit(features[0:(n_samples//3)*2], targets[0:(n_samples//3)*2])
-        
-        #predict the last 1/3 of the data
-        predictions = clf.predict(features[(n_samples//3)*2 +1:])
-
-
-        expected = targets[n_samples//3*2 +1:]
+        #evaluate model
+        stre, pred, tar, importances = self.evaluate(clf, self.activegps.counts, self.activegps.targets)
         
         #Compute OOB score
         print("OOB score: "+str(clf.oob_score_))
         
         
         #Compute best 50 features
-        best = self.bestNFeatures(clf.feature_importances_, self.ps.terms, 50)
+        best = self.bestNFeatures(importances, self.activegps.terms, 50)
 
         import csv
 
@@ -360,7 +351,7 @@ class MyPrompt(Cmd):
 
 
         #compute confusion matrix
-        cm = metrics.confusion_matrix(expected, predictions)
+        cm = metrics.confusion_matrix(tar, pred)
         print(cm)
 
         #write confusion matrix
@@ -372,9 +363,9 @@ class MyPrompt(Cmd):
 
 
         #make classification report
-        classReport = classification_report(expected, predictions, output_dict=True)
+        classReport = classification_report(tar, pred, output_dict=True)
 
-        print(classification_report(expected, predictions))
+        print(classification_report(tar, pred))
         #write classification report
 
         with open(expName+"_report.csv", 'w') as reportFile:
@@ -537,7 +528,10 @@ class MyPrompt(Cmd):
             writer.writerow(header)
             #make classification report
             for authorName, result in report.items():
-                row = [authorName]+[value for key, value in result.items()]
+                if authorName == "auc":
+                    row = ["auc"]+[result]
+                else:
+                    row = [authorName]+[value for key, value in result.items()]
                 print(row)
                 writer.writerow(row)
 
@@ -843,7 +837,7 @@ class MyPrompt(Cmd):
         while True:
             previous = strength
             
-            strength, importances = MyPrompt.evaluate(model, featureSubset, targets)
+            strength, pred, tar, importances = MyPrompt.evaluate(model, featureSubset, targets)
             #print((nFeatures, strength))
             if strength < previous and not once:
                 break
@@ -888,6 +882,8 @@ class MyPrompt(Cmd):
         featureCount = features.shape[1]
         cv = ShuffleSplit(n_splits=splits, train_size=trSize, test_size=teSize)
         
+        pred = []
+        tar = []
         
         importances = np.zeros(featureCount)
         strength = 0
@@ -898,17 +894,19 @@ class MyPrompt(Cmd):
 
             teFeatures = features[test]
             teTarget = targets[test]
+
+            tar.extend(teTarget)
    
             clf.fit(trFeatures, trTarget)
 
             predictions = clf.predict(teFeatures)
-
+            pred.extend(predictions)
             stren = len(np.where(predictions == teTarget)[0])/teSize
 
             strength += stren / splits
             importances += clf.feature_importances_ / splits
             
-        return (strength, importances)
+        return (strength, pred, tar, importances)
 
 
     def do_featureDetect(self, args):

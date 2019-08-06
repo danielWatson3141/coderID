@@ -102,7 +102,7 @@ def testDeAnonymizer(deAnonymizer, target):
     report = dict()
     print("producing report")
     samples = range(len(predicted))
-    for authorName in tqdm(target.authors):
+    for authorName in tqdm(deAnonymizer.authors):
         
         positives = [i for i in samples if predicted[i] == authorName]
         negatives = [i for i in samples if predicted[i] != authorName]
@@ -125,6 +125,7 @@ def testDeAnonymizer(deAnonymizer, target):
 
         report[authorName] = {"pr":pr,"oc": oc,"tpr":tpr, "tnr":tnr, "fpr":fpr, "fnr":fnr}
 
+    print("Computing averages")
     averages = dict()
     import statistics
     
@@ -132,7 +133,7 @@ def testDeAnonymizer(deAnonymizer, target):
         averages[stat] = statistics.mean([report[authName][stat] for authName in report])
     
     report["avg"] = averages
-
+    print("Computing roc statistics")
     fpr, tpr, thresholds = confidenceCurves(predicted, groundTruth, odds)
     curves = [fpr, tpr, thresholds]
 
