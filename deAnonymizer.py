@@ -136,7 +136,7 @@ def testDeAnonymizer(deAnonymizer, target):
     fpr, tpr, thresholds = confidenceCurves(predicted, groundTruth, odds)
     curves = [fpr, tpr, thresholds]
 
-    auc = auc(fpr, tpr)
+    auc = metrics.auc(fpr, tpr)
     report["auc"] = auc
 
     return (report, curves)
