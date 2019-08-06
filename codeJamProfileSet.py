@@ -66,10 +66,10 @@ class codeJamProfileSet:
 
 
         #decide whether to limit the number of extracted files
-        limit = bool(PPTools.Config.get_value("Pruning", "limit_to_k"))
+        limit = bool(PPTools.Config.get_value("CodeJam", "limit_to_k"))
 
         if limit:
-            limit = int(PPTools.Config.get_value("Pruning", "funcs_to_keep"))
+            limit = int(PPTools.Config.get_value("CodeJam", "funcs_to_keep"))
         else:
             limit = float("inf")
 
@@ -90,6 +90,7 @@ class codeJamProfileSet:
                 author = self.authors.get(authorName)
 
                 if len(author.files) >= limit:
+                    filesToDiscard.add(fileName)
                     continue
 
                 if fileName not in author.files:
