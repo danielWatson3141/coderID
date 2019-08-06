@@ -325,19 +325,22 @@ class MyPrompt(Cmd):
         from sklearn import metrics, utils
         from sklearn.metrics import classification_report
 
-        print("Generating CM")
         n_samples = len(self.activegps.target)
         clf = RandomForestClassifier(n_estimators=n_est, oob_score=True, max_features="log2")
-        
+
+        #reduce the features
+        selectedFeatures = self.reFeSe(clf, self.activegps.counts, self.activegps.target)
+        trFeatures = trFeatures[:,selectedFeatures]    #feature select for the athor
+        terms = [self.activegps.terms[i] for i in selectedFeatures]
+
         #evaluate model
-        stre, pred, tar, importances = self.evaluate(clf, self.activegps.counts, self.activegps.targets)
+        stre, pred, tar, importances = self.evaluate(clf, trFeatures, self.activegps.targets)
         
         #Compute OOB score
         print("OOB score: "+str(clf.oob_score_))
         
-        
         #Compute best 50 features
-        best = self.bestNFeatures(importances, self.activegps.terms, 50)
+        best = self.bestNFeatures(importances, terms, 50)
 
         import csv
 

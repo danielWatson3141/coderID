@@ -60,9 +60,9 @@ class codeJamProfileSet:
         wholeFile = PPTools.Config.get_value("CodeJam", "whole_file")
 
         if wholeFile:
-            print("Extracting whole file.")
+            print("Analyzing whole file.")
         else:
-            print("Extracting functions.")
+            print("Analyzing functions.")
 
 
         #decide whether to limit the number of extracted files
