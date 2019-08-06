@@ -334,7 +334,7 @@ class MyPrompt(Cmd):
         terms = [self.activegps.terms[i] for i in selectedFeatures]
 
         #evaluate model
-        stre, pred, tar, importances = self.evaluate(clf, trFeatures, self.activegps.targets)
+        stre, pred, tar, importances = self.evaluate(clf, trFeatures, self.activegps.target)
         
         #Compute OOB score
         print("OOB score: "+str(clf.oob_score_))
