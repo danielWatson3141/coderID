@@ -308,7 +308,7 @@ class MyPrompt(Cmd):
         args = args.split(" ")
         n_est = 300
 
-        expName = "exp"
+        expName = "GCJ_classify"
 
         if len(args) >= 1 and args[0] != '':
             maxDocs = int(args[0])

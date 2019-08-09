@@ -79,6 +79,10 @@ class codeJamProfileSet:
         for fileName in tqdm(self.files):
             try:
                 authorName = fileName.split("/")[-5]
+                solutionID = fileName.split("/")[-3]
+
+                if solutionID is not "0":
+                    continue
                 
                 if authors is not None and authorName not in authors:
                     continue
@@ -90,7 +94,7 @@ class codeJamProfileSet:
                 author = self.authors.get(authorName)
 
                 if len(author.files) >= limit:
-                    filesToDiscard.add(fileName)
+                    #filesToDiscard.add(fileName)
                     continue
 
                 if fileName not in author.files:

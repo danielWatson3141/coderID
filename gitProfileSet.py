@@ -427,7 +427,9 @@ class gitAuthor:
         return self.name+": "+str(len(self.commits))+" commits. "+str(len(self.lines))+" LOC, "+str(len(self.functions))+" complete functions from "+str(len(self.repos))+ " repos."
     
     def getRepos(self, skip=None):
-        return self.user.get_repos()
+        repos = list(self.user.get_repos())
+        print("Got "+str(len(repos))+" for "+self.name)
+        return repos
 
     def getRepoListofSelf(self, skipGiven = True, mine = False):
         """Generates a GPS of all repos this author has contributed, skipping existing repos by default."""
