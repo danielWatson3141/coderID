@@ -43,7 +43,8 @@ from sklearn.metrics import classification_report
 from plotting import plot_roc_auc_curves, plot_function_length_histogram, plot_confusion_matrix, plot_author_roc_auc_curve
 
 
-from tqdm import tqdm
+def tqdm(thing):
+    return thing
 
 class MyPrompt(Cmd):
 

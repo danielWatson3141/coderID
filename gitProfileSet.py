@@ -29,6 +29,10 @@ def gh():
         
 
 
+
+def tqdm(thing):
+    return thing
+
 class gitProfileSet:
 
     #TODO: Make it so re-compiling doesn't break
