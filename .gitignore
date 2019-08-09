@@ -19,3 +19,6 @@ allExperiments.cid
 settings.json
 *gcjExtractedFiles*
 *.zip
+*launch.json
+*pwd
+
