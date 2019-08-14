@@ -28,6 +28,7 @@ load ${repo}
 featureDetect
 save
 attackWith ${repo}_counter
+quit
 EOM
 
 # Run experiment file

@@ -425,7 +425,14 @@ class MyPrompt(Cmd):
     def do_getCounterSet(self, args):
         """build a gps of all authors work except the ones contained in this set"""
 
-        print("finding repos by authors in this set")
+        counterSetName = self.activegps.name+"_counter"
+
+        if counterSetName in self.gpsList:
+            self.do_load(self.activegps.name+"_counter")
+            return
+        else:
+            print("finding repos by authors in this set")   
+
         reposToGet=self.activegps.fetch_authors_other_work()
         #we really don't want forks of projects already in the set
         projectsOwned = set()
@@ -504,7 +511,7 @@ class MyPrompt(Cmd):
         weaponGPS = self.loadGPSFromFile(args)
 
         if not hasattr(targetGPS, "counts"):
-            self.targetGPS.getFeatures()
+            targetGPS.getFeatures()
             self.save(targetGPS)
         if not hasattr(weaponGPS, "counts"):
             weaponGPS.getFeatures()
@@ -1360,7 +1367,7 @@ class MyPrompt(Cmd):
     def clone_repo(self, targetRepo, destination = ""):
 
         import re
-        if re.match(r"[A-Za-z]*/[A-Za-z]*",targetRepo):
+        if re.match(r"[A-Za-z]*[/][A-Za-z]*",targetRepo):
             with open(os.getcwd()+"/github.token", 'r') as file:
                 import github
                 g = github.MainClass.Github(file.readline().split("\n")[0], timeout=30)
@@ -1406,7 +1413,7 @@ def get_memory():
 
 if __name__ == '__main__':
     
-    memory_limit() # Limitates maximun memory usage to 90%
+    #memory_limit() # Limitates maximun memory usage to 90%
     try:
         prompt = MyPrompt()
         prompt.prompt = 'coderID> '
