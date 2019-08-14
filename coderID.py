@@ -426,6 +426,12 @@ class MyPrompt(Cmd):
     def do_getCounterSet(self, args):
         """build a gps of all authors work except the ones contained in this set"""
 
+        try:
+            self.do_load(self.activegps.name+"_counter")
+            return
+        except:
+            print("finding repos by authors in this set")    
+
         print("finding repos by authors in this set")
         reposToGet=self.activegps.fetch_authors_other_work()
         #we really don't want forks of projects already in the set
@@ -505,7 +511,7 @@ class MyPrompt(Cmd):
         weaponGPS = self.loadGPSFromFile(args)
 
         if not hasattr(targetGPS, "counts"):
-            self.targetGPS.getFeatures()
+            targetGPS.getFeatures()
             self.save(targetGPS)
         if not hasattr(weaponGPS, "counts"):
             weaponGPS.getFeatures()
@@ -523,7 +529,7 @@ class MyPrompt(Cmd):
         import csv
 
         #write report results
-        with open(self.activegps.name+"_vs_"+targetGPS.name+"_attack_results.csv", 'w') as csvfile:
+        with open("classResults/"+self.activegps.name+"_vs_"+targetGPS.name+"_attack_results.csv", 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
             
@@ -1407,7 +1413,7 @@ def get_memory():
 
 if __name__ == '__main__':
     
-    memory_limit() # Limitates maximun memory usage to 90%
+    #memory_limit() # Limits maximun memory usage to 90%
     try:
         prompt = MyPrompt()
         prompt.prompt = 'coderID> '
