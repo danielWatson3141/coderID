@@ -35,9 +35,9 @@ echo "Copying Files for ${repo}"
 #copy save files from savedSets to savedSets on remote
 sshpass -f grahampwd scp savedSets/${repo} savedSets/${repo}_counter $user@$host:~/coderID/savedSets/
 
+
 echo "Launching Graham Analysis on ${repo}"
 #launch driver script on remote in detached mode
 sshpass -f grahampwd ssh $user@$host coderID/runLocal.sh "${repo}"
 
-#echo "Should be looping."
 done

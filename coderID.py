@@ -433,6 +433,7 @@ class MyPrompt(Cmd):
         else:
             print("finding repos by authors in this set")   
 
+
         reposToGet=self.activegps.fetch_authors_other_work()
         #we really don't want forks of projects already in the set
         projectsOwned = set()
