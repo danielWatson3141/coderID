@@ -425,7 +425,14 @@ class MyPrompt(Cmd):
     def do_getCounterSet(self, args):
         """build a gps of all authors work except the ones contained in this set"""
 
-        print("finding repos by authors in this set")
+        counterSetName = self.activegps.name+"_counter"
+
+        if counterSetName in self.gpsList:
+            self.do_load(self.activegps.name+"_counter")
+            return
+        else:
+            print("finding repos by authors in this set")
+
         reposToGet=self.activegps.fetch_authors_other_work()
         #we really don't want forks of projects already in the set
         projectsOwned = set()

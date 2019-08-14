@@ -1,11 +1,16 @@
 #!/bin/bash
 
-$host = "graham.computecanada.ca"
-$user = "dj2watso"
+host="graham.computecanada.ca"
+user="dj2watso"
 
-while read repo;
+echo "running"
+
+readarray a < repoList
+
+for repo in $a
 do
     
+echo "Running session ${repo}"
 # Create script file for extraction
     FILE="allExperiments.cid"
 
@@ -21,17 +26,16 @@ quit
 EOM
 
 # Run extraction
-echo "Running session ${repo}"
-python coderID.py allExperiments.cid
+python3 coderID.py allExperiments.cid
 
-$repo = ${repo/\//_}
+repo=${repo/\//_}
 
-echo "Copying Files"
+echo "Copying Files for ${repo}"
 #copy save files from savedSets to savedSets on remote
-sshpass -pf grahampwd scp -o ${repo} ${repo}_counter $user@$host:~/coderID/savedSets/
+sshpass -pf grahampwd scp -o savedSets/${repo} savedSets/${repo}_counter $user@$host:~/coderID/savedSets/
 
 echo "Launching Graham Analysis on ${repo}"
 #launch driver script on remote in detached mode
 sshpass -pf grahampwd ssh $user@$host screen -d -m ./runLocal.sh "${repo}"
 
-done < repoList
+done
