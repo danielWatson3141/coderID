@@ -95,73 +95,75 @@ class gitProfileSet:
                 
 
                 for commit in tqdm(miner.traverse_commits()):
-                    author = commit.author
-                    
-                    if author.name not in self.aliases:
-                        ghCommit = remote.get_commit(commit.hash)
-                        namedUser = ghCommit.author
-                        if not namedUser:
-                            continue
-                        if namedUser.login not in self.authors:
-                            self.authors[namedUser.login] = gitAuthor(namedUser)
-                        self.aliases[author.name] = namedUser.login
-
-                    author = self.authors[self.aliases[author.name]]
-                    
-                    if commit.hash in author.commits or commit.hash in self.commits:
-                        continue    #don't reprocess seen hashes
-
-                    self.commits.add(commit.hash)
-                    author.commits.add(commit.hash)
-
-                    if repo not in author.repos:
-                        author.repos.add(repo)
-                    
-                    for mod in commit.modifications:
-                        mod._calculate_metrics()
-                        if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
-                            continue
+                    try:
+                        author = commit.author
                         
-                        author.files.add(mod.new_path)
-                        #parse diff and add lines to list
-                        
-                        newSC = list()
-                        leDiff = repository.parse_diff(mod.diff)
-                        for num, line in leDiff["added"]:
-                            newSC.append(line)
+                        if author.name not in self.aliases:
+                            ghCommit = remote.get_commit(commit.hash)
+                            namedUser = ghCommit.author
+                            if not namedUser:
+                                continue
+                            if namedUser.login not in self.authors:
+                                self.authors[namedUser.login] = gitAuthor(namedUser)
+                            self.aliases[author.name] = namedUser.login
 
-                        from lizard import analyze_file as liz
-                        fileInfo = liz.analyze_source_code(mod.new_path, "\n".join(newSC))
-
-                        #maintain list of dicts containing the source code of specific functions. Same format as for lines
-                        lineIndex = 0
+                        author = self.authors[self.aliases[author.name]]
                         
-                        for fun in fileInfo.function_list:
-                            #Make sure these appear in the "function"
-                            arg_list_termination = r"\)\s*{"
-                            started = False
-                            newFun = dict()
-                            lineStr = ""
-                            try:
-                                while(leDiff["added"][lineIndex][0]<fun.start_line):
-                                    lineIndex+=1
+                        if commit.hash in author.commits or commit.hash in self.commits:
+                            continue    #don't reprocess seen hashes
+
+                        self.commits.add(commit.hash)
+                        author.commits.add(commit.hash)
+
+                        if repo not in author.repos:
+                            author.repos.add(repo)
+                        
+                        for mod in commit.modifications:
+                            mod._calculate_metrics()
+                            if mod.new_path is None or not mod.new_path.split(".")[-1] in gitProfileSet.langList:
+                                continue
                             
-                                while(leDiff["added"][lineIndex][0]<fun.end_line+1):
-                                    last_lineStr = lineStr
-                                    lineStr = leDiff["added"][lineIndex][1]
-                                    
-                                    if not started and re.search(arg_list_termination, "".join([lineStr,last_lineStr])):
-                                        started = True
-                                        
-                                    newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):lineStr})
-                                    lineIndex+=1
-                            except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
-                                pass
+                            author.files.add(mod.new_path)
+                            #parse diff and add lines to list
+                            
+                            newSC = list()
+                            leDiff = repository.parse_diff(mod.diff)
+                            for num, line in leDiff["added"]:
+                                newSC.append(line)
 
-                            if started and len(newFun) > 1 and '}' in lineStr + last_lineStr:
-                                author.lines.update(newFun)
-                                author.functions.append(self.functionToString(newFun)) 
-            
+                            from lizard import analyze_file as liz
+                            fileInfo = liz.analyze_source_code(mod.new_path, "\n".join(newSC))
+
+                            #maintain list of dicts containing the source code of specific functions. Same format as for lines
+                            lineIndex = 0
+                            
+                            for fun in fileInfo.function_list:
+                                #Make sure these appear in the "function"
+                                arg_list_termination = r"\)\s*{"
+                                started = False
+                                newFun = dict()
+                                lineStr = ""
+                                try:
+                                    while(leDiff["added"][lineIndex][0]<fun.start_line):
+                                        lineIndex+=1
+                                
+                                    while(leDiff["added"][lineIndex][0]<fun.end_line+1):
+                                        last_lineStr = lineStr
+                                        lineStr = leDiff["added"][lineIndex][1]
+                                        
+                                        if not started and re.search(arg_list_termination, "".join([lineStr,last_lineStr])):
+                                            started = True
+                                            
+                                        newFun.update({(commit.hash,mod.new_path,leDiff["added"][lineIndex][0]):lineStr})
+                                        lineIndex+=1
+                                except IndexError: #if end of input reached before end of functions. This is probable when non-complete functions are submitted.
+                                    pass
+
+                                if started and len(newFun) > 1 and '}' in lineStr + last_lineStr:
+                                    author.lines.update(newFun)
+                                    author.functions.append(self.functionToString(newFun)) 
+                    except Exception as e:
+                        continue
             except Exception as e:
                 print("problem processing "+repo)
                 continue

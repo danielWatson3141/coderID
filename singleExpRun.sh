@@ -1,8 +1,11 @@
 #!/bin/bash
-#SBATCH --time=12:00:00
+
+#SBATCH --time=03:00:00
 #SBATCH --account=def-m2nagapp
 #SBATCH --ntasks=4
 #SBATCH --mem-per-cpu=8G
+
+echo "loading modules..."
 
 echo "loading modules..."
 
@@ -34,7 +37,9 @@ attackWith ${repo}_counter
 quit
 EOM
 
+
 echo "running experiments on $repo"
+
 # Run experiment file
 python coderID.py experiments.cid
 
