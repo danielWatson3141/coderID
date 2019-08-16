@@ -93,6 +93,10 @@ class gitProfileSet:
                         for commit in remote.get_commits(author=authorName):
                             if commit.sha not in self.commits:
                                 commitsToMine.append(commit.sha)
+
+                    if not commitsToMine:
+                        print("No important commits here, skipping "+repo)
+                        continue
                     miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True, only_commits=commitsToMine)
                 else:
                     miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
@@ -181,12 +185,6 @@ class gitProfileSet:
             print(str("finished"+str(miner._path_to_repo)))
             print(self)
         self.repos = self.minedRepos
-        newAuthorRecord = dict()
-        for authorName, author in self.authors:
-            if author.functions:
-                newAuthorRecord[authorName]=author
-
-        self.authors = newAuthorRecord
 
     def displayAuthors(self):
         for value in self.authors.values():
