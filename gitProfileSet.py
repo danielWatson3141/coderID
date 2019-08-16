@@ -83,11 +83,22 @@ class gitProfileSet:
                 #if not os.path.exists(repo+".git"):
                 #    repo = os.listdir(repo)[0]
                 
-                miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
-                repository = pydriller.GitRepository(repo)
-                remote = self.get_remote(repo)
-                print("Scanning repo: "+miner._path_to_repo)
+
                 
+                remote = self.get_remote(repo)
+
+                if  self.authorsToMine:
+                    commitsToMine=[]
+                    for authorName in self.authorsToMine:
+                        for commit in remote.get_commits(author=authorName):
+                            if commit.sha not in self.commits:
+                                commitsToMine.append(commit.sha)
+                    miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True, only_commits=commitsToMine)
+                else:
+                    miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
+                repository = pydriller.GitRepository(repo)
+
+                print("Scanning repo: "+miner._path_to_repo)
 
                 for commit in tqdm(miner.traverse_commits()):
                     try:
