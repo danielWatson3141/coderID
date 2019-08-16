@@ -8,6 +8,8 @@ import zipfile
 import string
 import ProfileSet
 
+import pdb
+
 import cProfile
 
 from tqdm import tqdm
@@ -63,8 +65,9 @@ class MyPrompt(Cmd):
         self.resultLocation = os.getcwd()+"/classResults/"
         self.plotLocation = os.getcwd()+"/plots/"
         self.repoLocation = os.getcwd()+"/repos/"
+        self.userLocation = os.getcwd()+"/users/"
 
-        for direc in [self.saveLocation, self.resultLocation, self.plotLocation, self.repoLocation]:
+        for direc in [self.saveLocation, self.resultLocation, self.plotLocation, self.repoLocation, self.userLocation]:
             if not os.path.exists(direc):
                 os.mkdir(direc)
                 print("directory ", direc, " Created.")
@@ -141,6 +144,12 @@ class MyPrompt(Cmd):
         file = open(os.getcwd()+"/savedSets/"+gps.name, 'wb')
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
         pickler.dump(copy.deepcopy(gps))
+
+    def save_to_file(gps, filePath):
+        file = open(os.getcwd()+filePath, 'wb')
+        pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
+        pickler.dump(copy.deepcopy(gps))
+
         
     
     def do_load(self, args):
@@ -922,6 +931,49 @@ class MyPrompt(Cmd):
             
         return (strength, pred, tar, importances)
 
+
+    def do_deAnonymize(self, args):
+        """gathers author specific counter sets for authors that have them and evaluates their strength on the loaded set"""
+        if not self.activegps.featuresDetected:
+            self.do_featureDetect("")
+
+        results = []
+
+        for author in self.activegps.authors.values():
+            
+            try:
+                authorGPS = self.loadGPSFromFile("/users/"+author.name)
+                print(author.name + " loaded from file")
+            except Exception as e:
+                authorGPS = gitProfileSet.gitProfileSet(author.name)
+                print(author.name + " set created anew")
+
+            print("Fetching repos...")
+
+            for repo in tqdm(author.getRepos()):
+                repoURL = repo.clone_url
+                try:
+                    path = self.clone_repo(repoURL)
+                    authorGPS.addRepo(path)
+                except Exception as e:
+                    print("Couldn't get "+repoURL)
+                    continue
+
+            if not authorGPS.repos:
+                print("Nothing found for "+author.name)
+                continue
+
+            print(str(len(authorGPS.repos))+" found for "+author.name)
+
+            authorGPS.commits = self.activegps.commits.copy()
+            authorGPS.getFeatures()
+
+            self.save_to_file(authorGPS, "/users/"+author.name)
+            pdb.set_trace()
+            deAnon = deAnonymizer.DeAnonymizer(authorGPS)
+            result = (deAnon.attack(self.activegps))
+            pdb.set_trace()
+            results.append(result)
 
     def do_featureDetect(self, args):
         """Perform feature selection operations. 
