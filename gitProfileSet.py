@@ -39,6 +39,7 @@ class gitProfileSet:
         self.repos = []
         self.authors = dict()
         self.aliases = dict()
+        self.authorsToMine = set()
         self.featuresDetected = False
         self.featuresSelected = None
         self.termsSelected = None
@@ -102,6 +103,9 @@ class gitProfileSet:
                             self.aliases[author.name] = namedUser.login
 
                         author = self.authors[self.aliases[author.name]]
+
+                        if self.authorsToMine and author.name not in self.authorsToMine:
+                            continue
                         
                         if commit.hash in author.commits or commit.hash in self.commits:
                             continue    #don't reprocess seen hashes
@@ -161,11 +165,17 @@ class gitProfileSet:
             except Exception as e:
                 print("problem processing "+repo)
                 continue
-                    
+            
             self.minedRepos.add(repo)
             print(str("finished"+str(miner._path_to_repo)))
             print(self)
         self.repos = self.minedRepos
+        newAuthorRecord = dict()
+        for authorName, author in self.authors:
+            if author.functions:
+                newAuthorRecord[authorName]=author
+
+        self.authors = newAuthorRecord
 
     def displayAuthors(self):
         for value in self.authors.values():

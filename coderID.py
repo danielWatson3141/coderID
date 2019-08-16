@@ -45,8 +45,8 @@ from sklearn.metrics import classification_report
 from plotting import plot_roc_auc_curves, plot_function_length_histogram, plot_confusion_matrix, plot_author_roc_auc_curve
 
 
-def tqdm(thing):
-    return thing
+#def tqdm(thing):
+#    return thing
 
 class MyPrompt(Cmd):
 
@@ -189,6 +189,11 @@ class MyPrompt(Cmd):
     def loadGPSFromFile(self, fileName):
         file = open(os.getcwd()+"/savedSets/"+fileName, 'rb')
         return pickle.Unpickler(file).load() 
+
+    def loadGPSFromFilePath(self, filePath):
+        file = open(os.getcwd()+filePath, 'rb')
+        return pickle.Unpickler(file).load() 
+
 
     def do_ls(self, args):
         """List all available profile sets"""
@@ -941,41 +946,44 @@ class MyPrompt(Cmd):
 
         results = []
 
+        unionGPS = gitProfileSet.gitProfileSet(self.activegps.name+"_counter")
+
         for author in self.activegps.authors.values():
             
             try:
-                authorGPS = self.loadGPSFromFile("/users/"+author.name)
+                authorGPS = self.loadGPSFromFilePath("/users/"+author.name)
                 print(author.name + " loaded from file")
             except Exception as e:
+                #pdb.set_trace()
                 authorGPS = gitProfileSet.gitProfileSet(author.name)
                 print(author.name + " set created anew")
 
-            print("Fetching repos...")
+                print("Fetching repos...")
 
-            for repo in tqdm(author.getRepos()):
-                repoURL = repo.clone_url
-                try:
-                    path = self.clone_repo(repoURL)
-                    authorGPS.addRepo(path)
-                except Exception as e:
-                    print("Couldn't get "+repoURL)
+                for repo in tqdm(author.getRepos()):
+                    repoURL = repo.clone_url
+                    try:
+                        path = self.clone_repo(repoURL)
+                        authorGPS.addRepo(path)
+                    except Exception as e:
+                        print("Couldn't get "+repoURL)
+                        continue
+
+                if not authorGPS.repos:
+                    print("Nothing found for "+author.name)
                     continue
 
-            if not authorGPS.repos:
-                print("Nothing found for "+author.name)
-                continue
+                print(str(len(authorGPS.repos))+" found for "+author.name)
 
-            print(str(len(authorGPS.repos))+" found for "+author.name)
+                authorGPS.commits = self.activegps.commits.copy()
+                self.save_to_file(authorGPS, "/users/"+author.name)
+                authorGPS.authorsToMine.add(author.name)
+                unionGPS.merge_into(authorGPS)
 
-            authorGPS.commits = self.activegps.commits.copy()
-            authorGPS.getFeatures()
-
-            self.save_to_file(authorGPS, "/users/"+author.name)
-            pdb.set_trace()
-            deAnon = deAnonymizer.DeAnonymizer(authorGPS)
-            result = (deAnon.attack(self.activegps))
-            pdb.set_trace()
-            results.append(result)
+        unionGPS.getFeatures()
+        deAnon = deAnonymizer.DeAnonymizer(unionGPS)
+        result = (deAnon.attack(self.activegps))
+        return
 
     def do_featureDetect(self, args):
         """Perform feature selection operations. 
