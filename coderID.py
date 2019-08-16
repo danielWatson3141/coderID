@@ -145,6 +145,8 @@ class MyPrompt(Cmd):
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)
         pickler.dump(copy.deepcopy(gps))
 
+
+    @staticmethod
     def save_to_file(gps, filePath):
         file = open(os.getcwd()+filePath, 'wb')
         pickler = pickle.Pickler(file, pickle.HIGHEST_PROTOCOL)

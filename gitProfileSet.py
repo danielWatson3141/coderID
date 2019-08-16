@@ -27,12 +27,6 @@ def gh():
     with open(os.getcwd()+"/github.token", 'r') as file:
         return github.MainClass.Github(file.readline().split("\n")[0], timeout=30)
         
-
-
-
-def tqdm(thing):
-    return thing
-
 class gitProfileSet:
 
     #TODO: Make it so re-compiling doesn't break
@@ -487,4 +481,3 @@ class commitType(Enum):
             return commitType.FEATURE
 
         return commitType.OTHER
-
