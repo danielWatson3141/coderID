@@ -21,4 +21,5 @@ settings.json
 *.zip
 *launch.json
 *pwd
+/users/
 
