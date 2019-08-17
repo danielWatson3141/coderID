@@ -987,12 +987,12 @@ class MyPrompt(Cmd):
         report, curves = deAnonymizer.testDeAnonymizer(deAnon, self.activegps)
         print(str(report))
 
-        plot_author_roc_auc_curve("everyone", curves[0], curves[1],report["auc"],session_name=self.activegps.name+"_vs_"+targetGPS.name+"_attack_roc.png")
+        plot_author_roc_auc_curve("everyone", curves[0], curves[1],report["auc"],session_name=self.activegps.name+"_vs_"+unionGPS.name+"_attack_roc.png")
 
         import csv
 
         #write report results
-        with open("classResults/"+self.activegps.name+"_vs_"+targetGPS.name+"_attack_results.csv", 'w') as csvfile:
+        with open("classResults/"+self.activegps.name+"_vs_"+unionGPS.name+"_attack_results.csv", 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
             

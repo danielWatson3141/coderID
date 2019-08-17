@@ -23,6 +23,13 @@ class DeAnonymizer:
         trainedTargets = self.profileSet.target
         trainedNames = self.profileSet.terms
 
+        candidateSet = set(trainedTargets)
+
+        print("unifying candidate sets")
+        candidateIndeces = [i for i in range(len(targetTargets)) if targetTargets[i] in candidateSet]
+        
+        targetFeatures = targetFeatures[candidateIndeces,:]
+
         print("unifying features")
 
         targetNameIndeces = dict()
