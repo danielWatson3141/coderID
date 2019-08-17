@@ -380,7 +380,10 @@ class gitProfileSet:
 
     def merge_into(self, other):
         """merges other into self"""
-        other.compileAuthors()  #get author data first
+
+        if not other.authors:
+            other.compileAuthors()  #get author data first
+            
         for repo in other.repos:
             if repo not in self.repos:
                 self.repos.append(repo)

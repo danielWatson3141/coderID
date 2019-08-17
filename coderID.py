@@ -976,13 +976,34 @@ class MyPrompt(Cmd):
                 print(str(len(authorGPS.repos))+" found for "+author.name)
 
                 authorGPS.commits = self.activegps.commits.copy()
-                self.save_to_file(authorGPS, "/users/"+author.name)
                 authorGPS.authorsToMine.add(author.name)
-                unionGPS.merge_into(authorGPS)
+                authorGPS.compileAuthors()
+                self.save_to_file(authorGPS, "/users/"+author.name)
+
+            unionGPS.merge_into(authorGPS)
 
         unionGPS.getFeatures()
         deAnon = deAnonymizer.DeAnonymizer(unionGPS)
         result = (deAnon.attack(self.activegps))
+        import csv
+
+        #write report results
+        with open(self.activegps.name+"_vs_"+target.name+"_attack_results.csv", 'w') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            
+            oneSample = report[0]
+            header = ["Author"]
+            header.extend(oneSample.keys())
+            #print(header)
+            writer.writerow(header)
+            #make classification report
+            for authorName, result in report.items():
+                result = result[authorName]
+                row = [authorName]+[value for key, value in result.items()]
+                print(row)
+                writer.writerow(row)
+
         return
 
     def do_featureDetect(self, args):
