@@ -984,27 +984,31 @@ class MyPrompt(Cmd):
 
         unionGPS.getFeatures()
         deAnon = deAnonymizer.DeAnonymizer(unionGPS)
-        report = (deAnon.attack(self.activegps))
+        report, curves = deAnonymizer.testDeAnonymizer(deAnon, self.activegps)
+        print(str(report))
+
+        plot_author_roc_auc_curve("everyone", curves[0], curves[1],report["auc"],session_name=self.activegps.name+"_vs_"+targetGPS.name+"_attack_roc.png")
+
         import csv
 
         #write report results
-        with open(self.activegps.name+"_vs_"+unionGPS.name+"_attack_results.csv", 'w') as csvfile:
+        with open("classResults/"+self.activegps.name+"_vs_"+targetGPS.name+"_attack_results.csv", 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
             
-            oneSample = report[0]
+            oneSample = list(report.values())[0]
             header = ["Author"]
             header.extend(oneSample.keys())
-            #print(header)
+            print(header)
             writer.writerow(header)
             #make classification report
             for authorName, result in report.items():
-                result = result[authorName]
-                row = [authorName]+[value for key, value in result.items()]
+                if authorName == "auc":
+                    row = ["auc"]+[result]
+                else:
+                    row = [authorName]+[value for key, value in result.items()]
                 print(row)
                 writer.writerow(row)
-
-        return
 
     def do_featureDetect(self, args):
         """Perform feature selection operations. 
