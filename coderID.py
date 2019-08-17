@@ -984,11 +984,11 @@ class MyPrompt(Cmd):
 
         unionGPS.getFeatures()
         deAnon = deAnonymizer.DeAnonymizer(unionGPS)
-        result = (deAnon.attack(self.activegps))
+        report = (deAnon.attack(self.activegps))
         import csv
 
         #write report results
-        with open(self.activegps.name+"_vs_"+target.name+"_attack_results.csv", 'w') as csvfile:
+        with open(self.activegps.name+"_vs_"+unionGPS.name+"_attack_results.csv", 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
             
