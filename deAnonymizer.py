@@ -19,6 +19,10 @@ class DeAnonymizer:
         targetTargets = gps.target
         targetNames = gps.terms
 
+        from collections import Counter
+
+        
+
         trainedFeatures = self.profileSet.counts
         trainedTargets = self.profileSet.target
         trainedNames = self.profileSet.terms
@@ -26,9 +30,14 @@ class DeAnonymizer:
         candidateSet = set(trainedTargets)
 
         print("unifying candidate sets")
+        print(str(candidateSet))
         candidateIndeces = [i for i in range(len(targetTargets)) if targetTargets[i] in candidateSet]
         
         targetFeatures = targetFeatures[candidateIndeces,:]
+        targetTargets = targetTargets[candidateIndeces]
+
+        print("Trained:"+str(Counter(trainedTargets)))
+        print("Targets: "+str(Counter(targetTargets)))
 
         print("unifying features")
 
@@ -62,11 +71,12 @@ class DeAnonymizer:
         targetFeatures = filterFeatures(targetFeatures, targetNameIndeces, selectedNames)
         
         print("training model")
-        clf = Classifier().model
+        from sklearn.ensemble import RandomForestClassifier
+        clf = RandomForestClassifier(criterion="entropy", n_estimators = 300, n_jobs=-1, class_weight = None)
         clf.fit(trainedFeatures, trainedTargets)
         #predict the probabilities of the functions in the target repo
         print("predicting")
-        return (clf.predict_proba(targetFeatures), clf.classes_)
+        return (clf.predict_proba(targetFeatures), clf.classes_, targetTargets)
 
 def filterFeatures(features, nameIndeces, commonNames):
     featureIndeces = [nameIndeces[name] for name in commonNames]
@@ -80,9 +90,7 @@ def testDeAnonymizer(deAnonymizer, target):
     target: a target profile set with authors we want to de-anonymize
     """
     
-    pred_result, classes = deAnonymizer.attack(target)
-
-    groundTruth = target.target
+    pred_result, classes, groundTruth = deAnonymizer.attack(target)
 
     predicted = []
     odds = []

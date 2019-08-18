@@ -905,10 +905,8 @@ class MyPrompt(Cmd):
         section = 'Cross Validation'
 
         splits = PPTools.Config.get_value(section, 'n_splits')
-        trSize = int(max(PPTools.Config.get_value(section, 'train_min'),
-                         numSamples * PPTools.Config.get_value(section, 'train_ratio')))
-        teSize = int(max(PPTools.Config.get_value(section, 'test_min'),
-                         numSamples * PPTools.Config.get_value(section, 'test_ratio')))
+        trSize = int(numSamples * PPTools.Config.get_value(section, 'train_ratio'))
+        teSize = int(numSamples * PPTools.Config.get_value(section, 'test_ratio'))
         featureCount = features.shape[1]
         cv = ShuffleSplit(n_splits=splits, train_size=trSize, test_size=teSize)
         
@@ -946,43 +944,82 @@ class MyPrompt(Cmd):
 
         results = []
 
-        unionGPS = gitProfileSet.gitProfileSet(self.activegps.name+"_counter")
+        try:
+            unionGPS = self.loadGPSFromFile(self.activegps.name+"_counter")
+        except:
+            unionGPS = gitProfileSet.gitProfileSet(self.activegps.name+"_counter")
 
-        for author in self.activegps.authors.values():
-            
-            try:
-                authorGPS = self.loadGPSFromFilePath("/users/"+author.name)
-                print(author.name + " loaded from file")
-            except Exception as e:
-                #pdb.set_trace()
-                authorGPS = gitProfileSet.gitProfileSet(author.name)
-                print(author.name + " set created anew")
+            for author in self.activegps.authors.values():
+                
+                projectsOwned = set()
 
-                print("Fetching repos...")
+                #try really hard to filter out projects that match existing projects.
+                for repo in self.activegps.repos:
+                    projectName = repo.split("/")[-1]
+                    projectsOwned.add(projectName)
 
-                for repo in tqdm(author.getRepos()):
-                    repoURL = repo.clone_url
-                    try:
-                        path = self.clone_repo(repoURL)
-                        authorGPS.addRepo(path)
-                    except Exception as e:
-                        print("Couldn't get "+repoURL)
+                
+                try:
+                    authorGPS = self.loadGPSFromFilePath("/users/"+author.name)
+                    print(author.name + " loaded from file")
+                except Exception as e:
+                    #pdb.set_trace()
+                    authorGPS = gitProfileSet.gitProfileSet(author.name)
+                    print(author.name + " set created anew")
+
+                    print("Fetching repos...")
+
+                    for repo in tqdm(author.getRepos()):
+
+                        try:
+                            repoLanguages = repo.get_languages()
+
+                            #only mine if repo has C++ to mine
+                            #TODO make this configurable
+                            if "C++" not in repoLanguages or repoLanguages["C++"] < 1024:
+                                #print(repo.clone_url+" has no c++, skipping.")
+                                continue
+
+                            repoCommits = repo.get_commits(author=author.name)
+                            
+                            if not repoCommits:
+                                #print("author has no commits in repo, skipping")
+                                continue
+
+                            repoURL = repo.clone_url
+                        
+                            projectName = repoURL.split("/")[-1].split(".")[0]
+                            skip=False
+                            #see if the project looks to be a project we have already
+                            for ownedProject in projectsOwned:
+                                if ownedProject in projectName or projectName in ownedProject:
+                                    skip=True
+                                    print(projectName +" is likely fork of existing project, skipping")
+                                    break
+                            if not skip:
+                                #if we don't have it already, clone it and add it
+                                path = self.clone_repo(repoURL)
+                                authorGPS.addRepo(path)
+
+                        except Exception as e:
+                            print("Couldn't get "+str(repo))
+                            continue
+
+                    if not authorGPS.repos:
+                        print("Nothing found for "+author.name)
                         continue
 
-                if not authorGPS.repos:
-                    print("Nothing found for "+author.name)
-                    continue
+                    print(str(len(authorGPS.repos))+" found for "+author.name)
 
-                print(str(len(authorGPS.repos))+" found for "+author.name)
+                    authorGPS.commits = self.activegps.commits.copy()
+                    authorGPS.authorsToMine.add(author.name)
+                    authorGPS.compileAuthors()
+                    self.save_to_file(authorGPS, "/users/"+author.name)
 
-                authorGPS.commits = self.activegps.commits.copy()
-                authorGPS.authorsToMine.add(author.name)
-                authorGPS.compileAuthors()
-                self.save_to_file(authorGPS, "/users/"+author.name)
+                unionGPS.merge_into(authorGPS)
 
-            unionGPS.merge_into(authorGPS)
-
-        unionGPS.getFeatures()
+            unionGPS.getFeatures()
+            self.save(unionGPS)
         deAnon = deAnonymizer.DeAnonymizer(unionGPS)
         report, curves = deAnonymizer.testDeAnonymizer(deAnon, self.activegps)
         print(str(report))

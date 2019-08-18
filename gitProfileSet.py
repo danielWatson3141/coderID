@@ -86,8 +86,10 @@ class gitProfileSet:
 
                 
                 remote = self.get_remote(repo)
+                created = remote.created_at
 
-                if  self.authorsToMine:
+
+                if self.authorsToMine:
                     commitsToMine=[]
                     for authorName in self.authorsToMine:
                         for commit in remote.get_commits(author=authorName):
@@ -97,9 +99,9 @@ class gitProfileSet:
                     if not commitsToMine:
                         print("No important commits here, skipping "+repo)
                         continue
-                    miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True, only_commits=commitsToMine)
+                    miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True, only_commits=commitsToMine, since=created)
                 else:
-                    miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True)
+                    miner = pydriller.repository_mining.RepositoryMining(repo, only_modifications_with_file_types=gitProfileSet.langList,only_no_merge=True, since=created)
                 repository = pydriller.GitRepository(repo)
 
                 print("Scanning repo: "+miner._path_to_repo)
@@ -365,9 +367,18 @@ class gitProfileSet:
         del inputs_array, node_types_array, code_unigrams, node_bigrams_array
 
         self.target = np.array(self.target)
+
+        def allequal(columnVector):
+            return not any([columnVector.data[0] != columnVector.data[i] for i in range(columnVector.nnz)])
+
+        #post-process features to remove identically valued columns
+        counts = self.counts
+        indecesNonEqualColumns = [i for i in range(counts.shape[1]) if not allequal(counts.getcol(i))]
+
+        self.counts = self.counts[:,indecesNonEqualColumns] #keep columns which are not all equal to each other
+        self.terms = [self.terms[i] for i in indecesNonEqualColumns]
+
         self.featuresDetected = True
-            #should fit feature detector here
-            #then pass it down
     
     def functionToString(self, lines):
         return "\n".join(lines.values())
@@ -380,7 +391,6 @@ class gitProfileSet:
 
     def merge_into(self, other):
         """merges other into self"""
-
         if not other.authors:
             other.compileAuthors()  #get author data first
             
@@ -449,7 +459,17 @@ class gitAuthor:
         return self.name+": "+str(len(self.commits))+" commits. "+str(len(self.lines))+" LOC, "+str(len(self.functions))+" complete functions from "+str(len(self.repos))+ " repos."
     
     def getRepos(self, skip=None):
+        """gets a list of all repos a user owns and those they have recently contributed to"""
+
         repos = list(self.user.get_repos())
+
+        events = self.user.get_events()
+
+        for event in tqdm(events):
+            if event.type == "PushEvent":
+                repos.append(event.repo)
+        
+
         print("Got "+str(len(repos))+" for "+self.name)
         return repos
 
