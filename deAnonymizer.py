@@ -117,7 +117,7 @@ def testDeAnonymizer(deAnonymizer, target):
     report = dict()
     print("producing report")
     samples = range(len(predicted))
-    for authorName in tqdm(deAnonymizer.authors):
+    for authorName in tqdm(classes):
         
         positives = [i for i in samples if predicted[i] == authorName]
         negatives = [i for i in samples if predicted[i] != authorName]
@@ -129,22 +129,32 @@ def testDeAnonymizer(deAnonymizer, target):
         falsePositives = [i for i in samples if predicted[i] == authorName and groundTruth[i] != authorName]
         falseNegatives = [i for i in samples if predicted[i] != authorName and groundTruth[i] == authorName]
 
-        pr = len(positives) / len(predicted) #positive rate for the author
+        p = len(positives) #positives for the author
         
-        oc = len(occurances) / len(predicted)
+        
+        oc = len(occurances) #occurances
+        neg = (len(samples)-oc)
+        prevelence = oc / len(samples)
 
-        tpr = len(truePositives) / (len(positives)+1)
-        tnr = len(trueNegatives) / (len(negatives)+1)
-        fpr = 1-tpr
-        fnr = 1-tnr
+        tp = len(truePositives)
+        tn = len(trueNegatives)
+        fp = len(falsePositives)
+        fn = len(falseNegatives)
 
-        report[authorName] = {"pr":pr,"oc": oc,"tpr":tpr, "tnr":tnr, "fpr":fpr, "fnr":fnr}
+        recall = tp / oc
+        prec = tp / p if p else 0
+        fpr = fp / neg
+        fnr = fn / (tn+fn)
+        spec = tn / neg
+        acc = (tp+tn)/len(samples)
+
+        report[authorName] = {"prev":prevelence, "spec":spec, "fpr":fpr, "fnr":fnr, "prec":prec, "recall":recall}
 
     print("Computing averages")
     averages = dict()
     import statistics
     
-    for stat in ["pr", "oc", "tpr", "tnr", "fpr", "fnr"]:
+    for stat in ["prev", "spec", "fpr", "fnr", "prec", "recall"]:
         averages[stat] = statistics.mean([report[authName][stat] for authName in report])
     
     report["avg"] = averages
