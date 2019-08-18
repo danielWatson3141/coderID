@@ -182,6 +182,9 @@ class gitProfileSet:
             except Exception as e:
                 print("problem processing "+repo)
                 continue
+            except KeyboardInterrupt:
+                print("continuing")
+                continue
             
             self.minedRepos.add(repo)
             print(str("finished"+str(miner._path_to_repo)))
