@@ -112,9 +112,10 @@ def testDeAnonymizer(deAnonymizer, target):
         confidence = high - second
         
         predicted.append(pred)
-        odds.append(confidence)
+        #odds.append(confidence)
 
     report = dict()
+    curves = dict()
     print("producing report")
     samples = range(len(predicted))
     for authorName in tqdm(classes):
@@ -147,24 +148,24 @@ def testDeAnonymizer(deAnonymizer, target):
         fnr = fn / (tn+fn)
         spec = tn / neg
         acc = (tp+tn)/len(samples)
-
-        report[authorName] = {"prev":prevelence, "spec":spec, "fpr":fpr, "fnr":fnr, "prec":prec, "recall":recall}
+        
+        faporate, trporate, thresholds = confidenceCurves([authorName]*len(groundTruth), groundTruth, [vec[list(classes).index(authorName)] for vec in pred_result])
+        curves[authorName] = {"fpr":faporate, "tpr":trporate, authorName:{"AUC":metrics.auc(faporate, trporate), "support":oc}}
+        curves[authorName]["targets"] = [1 if groundTruth[i] == predicted[i] else 0 for i in range(len(groundTruth))]
+        curves[authorName]["predictions"] = [vec[list(classes).index(authorName)] for vec in pred_result]
+        report[authorName] = {"prev":prevelence,"acc":acc, "spec":spec, "fpr":fpr, "fnr":fnr, "prec":prec, "recall":recall, "auc":metrics.auc(faporate, trporate)}
+        
+        
 
     print("Computing averages")
     averages = dict()
     import statistics
     
-    for stat in ["prev", "spec", "fpr", "fnr", "prec", "recall"]:
+    for stat in ["prev", "spec", "fpr", "fnr", "prec", "recall", "auc"]:
         averages[stat] = statistics.mean([report[authName][stat] for authName in report])
     
     report["avg"] = averages
-    print("Computing roc statistics")
-    fpr, tpr, thresholds = confidenceCurves(predicted, groundTruth, odds)
-    curves = [fpr, tpr, thresholds]
-
-    auc = metrics.auc(fpr, tpr)
-    report["auc"] = auc
-
+    
     return (report, curves)
 
 def confidenceCurves(pred, true, confidence):
