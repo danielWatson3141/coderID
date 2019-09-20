@@ -1022,10 +1022,10 @@ class MyPrompt(Cmd):
             self.save(unionGPS)
         deAnon = deAnonymizer.DeAnonymizer(unionGPS)
         report, curves = deAnonymizer.testDeAnonymizer(deAnon, self.activegps)
-        print(str(report))
+        #print(str(report))
 
         for authorName in report:
-            if authorName != 'avg':
+            if authorName not in ['avg', 'med']:
                 curve = curves[authorName]
                 plot_author_roc_auc_curve(authorName, curve["fpr"], curve["tpr"],curve[authorName]["AUC"],session_name=self.activegps.name+"_vs_"+unionGPS.name+"_attack")
 
@@ -1044,8 +1044,8 @@ class MyPrompt(Cmd):
             print(header)
             writer.writerow(header)
             #make classification report
-            for authorName, result in report.items():
-                row = [authorName]+[value for key, value in result.items()]
+            for authorName, result in report.items():                
+                row = [authorName]+[round(value,ndigits=4) for key, value in result.items()]
                 print(row)
                 writer.writerow(row)
 

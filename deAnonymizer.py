@@ -21,13 +21,26 @@ class DeAnonymizer:
 
         from collections import Counter
 
-        
-
         trainedFeatures = self.profileSet.counts
         trainedTargets = self.profileSet.target
         trainedNames = self.profileSet.terms
 
         candidateSet = set(trainedTargets)
+
+        trainedCounts = Counter(trainedTargets)
+        targetCounts = Counter(targetTargets)
+
+        updatedCandidateSet = set()
+
+        #only keep authors with at least ten samples in train and test
+        for candidate in candidateSet:
+            if trainedCounts[candidate] < 25 or targetCounts[candidate] < 10:
+                print("Insufficient samples to test "+candidate)
+            else:
+                updatedCandidateSet.add(candidate)
+        
+        candidateSet = updatedCandidateSet
+
 
         print("unifying candidate sets")
         print(str(candidateSet))
@@ -36,8 +49,13 @@ class DeAnonymizer:
         targetFeatures = targetFeatures[candidateIndeces,:]
         targetTargets = targetTargets[candidateIndeces]
 
-        print("Trained:"+str(Counter(trainedTargets)))
-        print("Targets: "+str(Counter(targetTargets)))
+        candidateIndeces = [i for i in range(len(trainedTargets)) if trainedTargets[i] in candidateSet]
+        
+        trainedFeatures = trainedFeatures[candidateIndeces,:]
+        trainedTargets = trainedTargets[candidateIndeces]
+
+        print("Trained:"+str(trainedCounts))
+        print("Targets: "+str(targetCounts))
 
         print("unifying features")
 
@@ -54,29 +72,34 @@ class DeAnonymizer:
         
         #filter to common features in trained
         trainedFeatures = filterFeatures(trainedFeatures, trainedNameIndeces, commonNames)
-    
-        #perform recursive feature elimination on whats left
-        selectedFeatureIndeces = MyPrompt.reFeSe(Classifier().model, trainedFeatures, trainedTargets)
-        selectedNames = [commonNames[i] for i in selectedFeatureIndeces]
         
-        
-        #redo these because they have changed
-        trainedNameIndeces = dict()
-        for index in range(len(selectedNames)):
-            trainedNameIndeces[selectedNames[index]] = index
+
+        featureSelect = False
+        if featureSelect:
+            #perform recursive feature elimination on whats left
+            selectedFeatureIndeces = MyPrompt.reFeSe(Classifier().model, trainedFeatures, trainedTargets)
+            selectedNames = [commonNames[i] for i in selectedFeatureIndeces]
+            
+            
+            #redo these because they have changed
+            trainedNameIndeces = dict()
+            for index in range(len(selectedNames)):
+                trainedNameIndeces[selectedNames[index]] = index
 
 
-        #filter to only the selected Features
-        trainedFeatures = filterFeatures(trainedFeatures, trainedNameIndeces, selectedNames)
-        targetFeatures = filterFeatures(targetFeatures, targetNameIndeces, selectedNames)
-        
+            #filter to only the selected Features
+            trainedFeatures = filterFeatures(trainedFeatures, trainedNameIndeces, selectedNames)
+            targetFeatures = filterFeatures(targetFeatures, targetNameIndeces, selectedNames)
+        else:
+            targetFeatures = filterFeatures(targetFeatures, targetNameIndeces, commonNames)
+
         print("training model")
         from sklearn.ensemble import RandomForestClassifier
-        clf = RandomForestClassifier(criterion="entropy", n_estimators = 300, n_jobs=-1, class_weight = None)
+        clf = RandomForestClassifier(criterion="entropy", n_estimators = 300, n_jobs=-1, class_weight = "balanced_subsample")
         clf.fit(trainedFeatures, trainedTargets)
         #predict the probabilities of the functions in the target repo
         print("predicting")
-        return (clf.predict_proba(targetFeatures), clf.classes_, targetTargets)
+        return (clf.predict_proba(targetFeatures), clf.classes_, targetTargets, trainedCounts)
 
 def filterFeatures(features, nameIndeces, commonNames):
     featureIndeces = [nameIndeces[name] for name in commonNames]
@@ -90,7 +113,7 @@ def testDeAnonymizer(deAnonymizer, target):
     target: a target profile set with authors we want to de-anonymize
     """
     
-    pred_result, classes, groundTruth = deAnonymizer.attack(target)
+    pred_result, classes, groundTruth, trainingCounts = deAnonymizer.attack(target)
 
     predicted = []
     odds = []
@@ -118,6 +141,7 @@ def testDeAnonymizer(deAnonymizer, target):
     curves = dict()
     print("producing report")
     samples = range(len(predicted))
+    print("Overall accuracy: "+str(len([i for i in samples if predicted[i]==groundTruth[i]])/len(samples)))
     for authorName in tqdm(classes):
         
         positives = [i for i in samples if predicted[i] == authorName]
@@ -145,7 +169,7 @@ def testDeAnonymizer(deAnonymizer, target):
         recall = tp / oc
         prec = tp / p if p else 0
         fpr = fp / neg
-        fnr = fn / (tn+fn)
+        fnr = fn / (len(samples) - neg)
         spec = tn / neg
         acc = (tp+tn)/len(samples)
         
@@ -153,18 +177,22 @@ def testDeAnonymizer(deAnonymizer, target):
         curves[authorName] = {"fpr":faporate, "tpr":trporate, authorName:{"AUC":metrics.auc(faporate, trporate), "support":oc}}
         curves[authorName]["targets"] = [1 if groundTruth[i] == predicted[i] else 0 for i in range(len(groundTruth))]
         curves[authorName]["predictions"] = [vec[list(classes).index(authorName)] for vec in pred_result]
-        report[authorName] = {"prev":prevelence,"acc":acc, "spec":spec, "fpr":fpr, "fnr":fnr, "prec":prec, "recall":recall, "auc":metrics.auc(faporate, trporate)}
+        report[authorName] = {"prev":prevelence, "trained":trainingCounts[authorName], "occ":oc, "acc":acc, "spec":spec, "fpr":fpr, "fnr":fnr, "prec":prec, "recall":recall, "auc":metrics.auc(faporate, trporate)}
         
         
 
     print("Computing averages")
     averages = dict()
+    median = dict()
     import statistics
     
-    for stat in ["prev", "spec", "fpr", "fnr", "prec", "recall", "auc"]:
-        averages[stat] = statistics.mean([report[authName][stat] for authName in report])
+    for stat in report[authorName]:
+        stats = [report[authName][stat] for authName in report]
+        averages[stat] = statistics.mean(stats)
+        median[stat] = statistics.median(stats)
     
     report["avg"] = averages
+    report["med"] = median
     
     return (report, curves)
 

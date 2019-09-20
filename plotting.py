@@ -53,7 +53,7 @@ def get_avg_roc_auc(results):
             "AUC": auc(all_fpr, weighted_mean_tpr),
         },
         "micro": {
-            "fpr" : micro_fpr,
+            "fpr" :micro_fpr,
             "tpr": micro_tpr,
             "AUC": auc(micro_fpr, micro_tpr),
         },
@@ -95,11 +95,11 @@ def plot_average_roc_auc_curve(roc_averages):
         linestyle=":",
     )
     ## Plot micro average ROC
-    plt.plot(
-        roc_averages["micro"]["fpr"], roc_averages["micro"]["tpr"], color="green", lw=lw,
-        label="micro average ROC curve (area = {0:0.4f})".format(roc_averages["micro"]["AUC"]),
-        linestyle=":",
-    )
+    # plt.plot(
+    #     roc_averages["micro"]["fpr"], roc_averages["micro"]["tpr"], color="green", lw=lw,
+    #     label="micro average ROC curve (area = {0:0.4f})".format(roc_averages["micro"]["AUC"]),
+    #     linestyle=":",
+    # )
 
 
 def plot_roc_auc_curves(results, directory="plots", session_name=""):
